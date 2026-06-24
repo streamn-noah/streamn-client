@@ -180,7 +180,7 @@ export function StreamnApp() {
 
       <section className='relative z-10 mx-auto flex min-h-[54vh] w-full max-w-5xl flex-col items-center justify-center px-5 pb-10 pt-28 text-center'>
         <p className='reveal mb-3 rounded-full tracking-widest font-bold uppercase border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs text-red-200'>
-          Beta
+          Streamn Beta by Noah
         </p>
         <h1 className='reveal reveal-delay-2 max-w-3xl text-5xl font-bold leading-none tracking-tight sm:text-5xl md:text-6xl'>
           Find the perfect thing to watch.
