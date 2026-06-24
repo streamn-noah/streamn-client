@@ -11,6 +11,7 @@ export type MediaSummary = {
   voteAverage: number;
   year: string;
   genreIds: number[];
+  logoPath?: string | null;
 };
 
 export type CastMember = {
@@ -69,8 +70,28 @@ export function tmdbImage(path: string | null | undefined, size = "w500") {
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
 
-export function cinesrcUrl(type: MediaType, id: number, season = 1, episode = 1) {
-  const base = `https://cinesrc.st/embed/${type}/${id}`;
-  if (type === "movie") return `${base}?color=%23e50914&back=close`;
-  return `${base}?s=${season}&e=${episode}&color=%23e50914&back=close`;
+export function cinesrcUrl(
+  type: MediaType,
+  id: number,
+  season = 1,
+  episode = 1,
+  startSeconds?: number,
+) {
+  const params = new URLSearchParams({
+    color: "#e50914",
+    back: "close",
+  });
+
+  if (type === "tv") {
+    params.set("s", String(season));
+    params.set("e", String(episode));
+  }
+
+  if (startSeconds && startSeconds >= 30) {
+    params.set("t", String(Math.floor(startSeconds)));
+    params.set("continueprompt", "false");
+  }
+
+  const query = params.toString().replace(/#/g, "%23");
+  return `https://cinesrc.st/embed/${type}/${id}?${query}`;
 }

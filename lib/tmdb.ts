@@ -213,11 +213,164 @@ export async function searchWithPlan(plan: SearchPlan) {
 }
 
 export async function roulettePick(plan: SearchPlan) {
-  const page = Math.max(1, Math.floor(Math.random() * 5) + 1);
-  const type = plan.mediaType === "tv" ? "tv" : plan.mediaType === "movie" ? "movie" : Math.random() > 0.5 ? "movie" : "tv";
-  const pool = await discover(type, plan, page);
-  const fallback = pool.length ? pool : await discover(type, fallbackPlan("popular"), 1);
-  return fallback[Math.floor(Math.random() * fallback.length)];
+  const queue = await rouletteQueue(plan, 1);
+  return queue[0];
+}
+
+export async function rouletteQueue(plan: SearchPlan, count = 12) {
+  const type =
+    plan.mediaType === "tv"
+      ? "tv"
+      : plan.mediaType === "movie"
+        ? "movie"
+        : Math.random() > 0.5
+          ? "movie"
+          : "tv";
+
+  const pages = Array.from({ length: 5 }, (_, index) => index + 1);
+  const batches = await Promise.all(pages.map((page) => discover(type, plan, page).catch(() => [])));
+  let pool = uniqueByMedia(batches.flat());
+
+  if (!pool.length) {
+    pool = await discover(type, fallbackPlan("popular"), 1);
+  }
+
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+export async function getTrending(
+  mediaType: MediaType | "all",
+  timeWindow: "day" | "week" = "week",
+) {
+  const path =
+    mediaType === "all"
+      ? `/trending/all/${timeWindow}`
+      : `/trending/${mediaType}/${timeWindow}`;
+
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(path);
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item)).filter(Boolean) as MediaSummary[],
+  );
+}
+
+export async function getLatest(mediaType: MediaType, page = 1) {
+  const endpoint = mediaType === "movie" ? "/discover/movie" : "/discover/tv";
+  const sortBy = mediaType === "movie" ? "primary_release_date.desc" : "first_air_date.desc";
+
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(endpoint, {
+    include_adult: false,
+    page,
+    sort_by: sortBy,
+    "vote_count.gte": 20,
+  });
+
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, mediaType)).filter(Boolean) as MediaSummary[],
+  );
+}
+
+export async function getTopRated(mediaType: MediaType, page = 1) {
+  const path = mediaType === "movie" ? "/movie/top_rated" : "/tv/top_rated";
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(path, {
+    include_adult: false,
+    page,
+  });
+
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, mediaType)).filter(Boolean) as MediaSummary[],
+  );
+}
+
+export const watchProviders = [
+  { id: 8, name: "Netflix", slug: "netflix" },
+  { id: 9, name: "Amazon Prime", slug: "prime" },
+  { id: 337, name: "Disney+", slug: "disney" },
+  { id: 1899, name: "Max", slug: "max" },
+  { id: 15, name: "Hulu", slug: "hulu" },
+] as const;
+
+export async function getByProvider(
+  mediaType: MediaType,
+  providerId: number,
+  page = 1,
+) {
+  const endpoint = mediaType === "movie" ? "/discover/movie" : "/discover/tv";
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(endpoint, {
+    include_adult: false,
+    page,
+    sort_by: "popularity.desc",
+    watch_region: "US",
+    with_watch_providers: providerId,
+  });
+
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, mediaType)).filter(Boolean) as MediaSummary[],
+  );
+}
+
+export async function getRecommendations(type: MediaType, id: number) {
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(`/${type}/${id}/recommendations`);
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, type)).filter(Boolean) as MediaSummary[],
+  ).slice(0, 16);
+}
+
+export async function discoverByGenre(
+  mediaType: MediaType,
+  genreId: number,
+  page = 1,
+) {
+  const endpoint = mediaType === "movie" ? "/discover/movie" : "/discover/tv";
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(endpoint, {
+    include_adult: false,
+    page,
+    sort_by: "popularity.desc",
+    with_genres: genreId,
+    "vote_count.gte": 40,
+  });
+
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, mediaType)).filter(Boolean) as MediaSummary[],
+  );
+}
+
+export async function getGenreList(mediaType: MediaType) {
+  const data = await tmdbFetch<{ genres: { id: number; name: string }[] }>(
+    `/genre/${mediaType}/list`,
+  );
+  return data.genres;
+}
+
+async function fetchLogoPath(type: MediaType, id: number) {
+  try {
+    const data = await tmdbFetch<{
+      logos?: { file_path: string; iso_639_1: string | null }[];
+    }>(`/${type}/${id}/images`, {
+      include_image_language: "en,null",
+    });
+
+    const logo =
+      data.logos?.find((item) => item.iso_639_1 === "en") ??
+      data.logos?.find((item) => item.iso_639_1 === null) ??
+      data.logos?.[0] ??
+      null;
+
+    return logo?.file_path ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function enrichWithLogos(items: MediaSummary[]) {
+  const logos = await Promise.all(
+    items.map((item) => fetchLogoPath(item.mediaType, item.id)),
+  );
+
+  return items.map((item, index) => ({
+    ...item,
+    logoPath: logos[index] ?? null,
+  }));
 }
 
 function pickCertification(detail: TmdbDetail, type: MediaType) {

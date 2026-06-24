@@ -1,6 +1,7 @@
-import Link from "next/link";
-import { ArrowLeft, Shuffle } from "lucide-react";
-import { cinesrcUrl, type MediaType } from "@/lib/media";
+import { WatchHeader } from "@/components/streamn/watch-header";
+import { WatchPlayer } from "@/components/streamn/watch-player";
+import { type MediaSummary, type MediaType } from "@/lib/media";
+import { getMediaDetail } from "@/lib/tmdb";
 
 export default async function WatchPage({
   params,
@@ -16,34 +17,51 @@ export default async function WatchPage({
   const episode = Number(e ?? 1);
 
   const validType = type === "movie" || type === "tv";
-  const src = validType && Number.isFinite(numericId) ? cinesrcUrl(type, numericId, season, episode) : "";
+  let detail = null;
+
+  if (validType && Number.isFinite(numericId)) {
+    try {
+      detail = await getMediaDetail(type, numericId);
+    } catch {
+      detail = null;
+    }
+  }
+
+  const item: MediaSummary =
+    detail ??
+    ({
+      id: numericId,
+      mediaType: type,
+      title: "Untitled",
+      subtitle: type === "movie" ? "Movie" : "Series",
+      overview: "",
+      posterPath: null,
+      backdropPath: null,
+      voteAverage: 0,
+      year: "",
+      genreIds: [],
+    } satisfies MediaSummary);
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      <div className="flex h-screen flex-col">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-black/80 px-4 backdrop-blur md:px-6">
-          <Link className="ghost-button h-10 px-4" href="/">
-            <ArrowLeft className="size-5" />
-            Back
-          </Link>
-          <div className="text-sm font-semibold text-white/45">Powered by CineSrc</div>
-          <Link className="ghost-button h-10 px-4" href="/">
-            <Shuffle className="size-5" />
-            New pick
-          </Link>
-        </header>
-        {src ? (
-          <iframe
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
-            className="min-h-0 flex-1"
-            referrerPolicy="no-referrer"
-            sandbox="allow-scripts allow-same-origin allow-presentation"
-            src={src}
-            title="Streamn player"
+    <main className='min-h-screen bg-black text-white'>
+      <div className='flex h-screen flex-col'>
+        <WatchHeader
+          mediaId={numericId}
+          mediaType={type}
+          title={detail?.title}
+        />
+        {validType && Number.isFinite(numericId) ? (
+          <WatchPlayer
+            episode={episode}
+            item={item}
+            mediaId={numericId}
+            mediaType={type}
+            season={season}
           />
         ) : (
-          <div className="grid flex-1 place-items-center text-white/60">This watch link is invalid.</div>
+          <div className='grid flex-1 place-items-center text-white/60'>
+            This watch link is invalid.
+          </div>
         )}
       </div>
     </main>
