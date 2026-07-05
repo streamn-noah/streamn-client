@@ -12,6 +12,7 @@ export type MediaSummary = {
   year: string;
   genreIds: number[];
   logoPath?: string | null;
+  trailerKey?: string | null;
 };
 
 export type CastMember = {
@@ -80,6 +81,10 @@ export function cinesrcUrl(
   const params = new URLSearchParams({
     color: "#e50914",
     back: "close",
+    autoplay: "true",
+    muted: "true",
+    controls: "true",
+    prioritize: "true",
   });
 
   if (type === "tv") {
@@ -124,3 +129,26 @@ export function cinesrcPreviewUrl(
   const query = params.toString().replace(/#/g, "%23");
   return `https://cinesrc.st/embed/${type}/${id}?${query}`;
 }
+
+export function vidlinkUrl(
+  type: MediaType,
+  id: number,
+  season = 1,
+  episode = 1,
+  startSeconds?: number,
+) {
+  const params = new URLSearchParams({
+    primaryColor: "e50914",
+    secondaryColor: "222222",
+    iconColor: "ffffff",
+    icons: "vid",
+    autoplay: "true",
+  });
+
+  const query = params.toString();
+  if (type === "movie") {
+    return `https://vidlink.pro/movie/${id}?${query}`;
+  }
+  return `https://vidlink.pro/tv/${id}/${season}/${episode}?${query}`;
+}
+

@@ -144,6 +144,25 @@ export async function getWatchHistory(): Promise<WatchHistoryRow[]> {
   return data ?? [];
 }
 
+export async function removeFromWatchHistory(
+  mediaId: number,
+  mediaType: "movie" | "tv",
+): Promise<boolean> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { error } = await supabase
+    .from("watch_history")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("media_id", mediaId)
+    .eq("media_type", mediaType);
+  return !error;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // WATCHLISTS
 // ─────────────────────────────────────────────────────────────────────────────

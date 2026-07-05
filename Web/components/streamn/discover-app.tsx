@@ -2,39 +2,53 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Clock, Info, Play, X } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
+import {
+  Info,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  ChevronLeft,
+  ChevronRight,
+  Star,
+  Loader2,
+  X,
+} from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   DetailSkeleton,
   MediaDetailContent,
 } from "@/components/streamn/media-detail-content";
+import { IframePlayer } from "@/components/streamn/iframe-player";
 import { ResponsiveMediaModal } from "@/components/streamn/responsive-media-modal";
 import { StreamnNav } from "@/components/streamn/streamn-nav";
 import type { MediaDetail, MediaSummary, MediaType } from "@/lib/media";
 import { tmdbImage } from "@/lib/media";
 import {
   getContinueWatching,
-  getLastWatched,
   watchHref,
   removeFromStorage,
+  getWatchProgress,
+  type WatchProgress,
 } from "@/lib/streamn-storage";
-import amazonLogo from "@/assets/images/Amazon_Prime_logo_(2024).svg";
+import { cinesrcUrl } from "@/lib/media";
+
 import disneyLogo from "@/assets/images/Disney_Plus_logo.svg";
-import huluLogo from "@/assets/images/Hulu_logo_(2014).svg";
-import maxLogo from "@/assets/images/Max_logo.svg";
 import netflixLogo from "@/assets/images/Netflix_2014_logo.svg";
-import { useAuth } from "@/components/providers/auth-provider";
+import peacockLogo from "@/assets/images/Peacock_logo.svg";
+import maxLogo from "@/assets/images/Max_logo.svg";
+import amazonLogo from "@/assets/images/Amazon_Prime_logo_(2024).svg";
+import huluLogo from "@/assets/images/Hulu_logo_(2014).svg";
 
-const providerLogoMap: Record<string, string> = {
-  netflix: netflixLogo.src,
-  prime: amazonLogo.src,
-  disney: disneyLogo.src,
-  max: maxLogo.src,
-  hulu: huluLogo.src,
-};
-
-const PROVIDER_SLUGS = ["netflix", "prime", "disney", "max", "hulu"] as const;
+const STUDIO_NETWORKS = [
+  { name: "Disney+", slug: "disney", logo: disneyLogo.src },
+  { name: "Netflix", slug: "netflix", logo: netflixLogo.src },
+  { name: "Peacock", slug: "peacock", logo: peacockLogo.src },
+  { name: "HBO Max", slug: "max", logo: maxLogo.src },
+  { name: "Prime Video", slug: "prime", logo: amazonLogo.src },
+  { name: "Hulu", slug: "hulu", logo: huluLogo.src },
+];
 
 export type DiscoverPageData = {
   bannerItems: MediaSummary[];
@@ -47,10 +61,25 @@ export type DiscoverPageData = {
   latestTv: MediaSummary[];
   topRatedMovies: MediaSummary[];
   topRatedTv: MediaSummary[];
-  providers: { name: string; slug: string }[];
+  providers: { name: string; slug: string; logoPath?: string }[];
   movieGenres: { id: number; name: string }[];
   tvGenres: { id: number; name: string }[];
 };
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (
+        element: HTMLElement | string,
+        config: Record<string, unknown>
+      ) => unknown;
+      PlayerState?: {
+        ENDED: number;
+      };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
 
 function useRevealOnScroll() {
   const ref = useRef<HTMLDivElement>(null);
@@ -67,7 +96,7 @@ function useRevealOnScroll() {
           observer.disconnect();
         }
       },
-      { rootMargin: "140px 0px", threshold: 0.08 },
+      { rootMargin: "140px 0px", threshold: 0.08 }
     );
 
     observer.observe(node);
@@ -92,7 +121,7 @@ function LazyRevealRow({
     <div ref={ref}>
       {visible ? (
         <div
-          className='discover-row-enter'
+          className="discover-row-enter"
           style={{ animationDelay: `${80 + animationIndex * 90}ms` }}
         >
           {children}
@@ -104,22 +133,103 @@ function LazyRevealRow({
   );
 }
 
+function MediaCard({
+  item,
+  onSelect,
+  onRemove,
+}: {
+  item: MediaSummary;
+  onSelect: (item: MediaSummary) => void;
+  onRemove?: (item: MediaSummary) => void;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-1.5 shrink-0 w-32 sm:w-40 md:w-44 group cursor-pointer"
+      onClick={() => onSelect(item)}
+    >
+      <div className="relative aspect-[1/1.4] w-full rounded-xl overflow-hidden bg-zinc-900 border border-white/5 shadow-md group-hover:-translate-y-1.5 group-hover:ring-2 group-hover:ring-white/40 group-hover:border-white/50 transition-all duration-300">
+        <Image
+          src={tmdbImage(item.posterPath || item.backdropPath, "w500")}
+          alt={item.title}
+          fill
+          sizes="(max-width: 768px) 160px, 200px"
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        {onRemove && (
+          <button
+            className="absolute top-2 right-2 bg-black/70 rounded-full p-1.5 hover:bg-red-600 transition-colors z-20"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(item);
+            }}
+            type="button"
+            aria-label="Remove item"
+          >
+            <X className="w-3.5 h-3.5 text-white" />
+          </button>
+        )}
+      </div>
+      <div className="flex flex-col gap-0.5 px-0.5">
+        <h3 className="text-white font-semibold text-xs sm:text-sm line-clamp-1 group-hover:text-white/90 transition-colors">
+          {item.title}
+        </h3>
+        <div className="flex items-center gap-1 text-[11px] sm:text-xs text-white/50 font-medium">
+          <Star className="w-3 h-3 fill-white text-white shrink-0" />
+          <span>{item.voteAverage ? item.voteAverage.toFixed(1) : "N/A"}</span>
+          <span>·</span>
+          <span>{item.year || "2026"}</span>
+          <span>·</span>
+          <span className="capitalize">{item.mediaType === "movie" ? "Movie" : "Series"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Top10Card({
+  item,
+  rank,
+  onSelect,
+}: {
+  item: MediaSummary;
+  rank: number;
+  onSelect: (item: MediaSummary) => void;
+}) {
+  return (
+    <div
+      className="relative flex items-center shrink-0 cursor-pointer group select-none pr-3"
+      onClick={() => onSelect(item)}
+    >
+      <span className="text-6xl sm:text-7xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-white/80 to-white/20 drop-shadow-[0_10px_20px_rgba(0,0,0,0.9)] tracking-tighter shrink-0 -mr-5 z-0 pointer-events-none">
+        {rank}
+      </span>
+      <div className="relative aspect-[1/1.4] w-32 sm:w-40 md:w-44 rounded-xl overflow-hidden bg-zinc-900 border border-white/10 shadow-2xl z-10 group-hover:-translate-y-1.5 group-hover:ring-2 group-hover:ring-white/40 group-hover:border-white/50 transition-all duration-300">
+        <Image
+          src={tmdbImage(item.posterPath || item.backdropPath, "w500")}
+          alt={item.title}
+          fill
+          sizes="180px"
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      </div>
+    </div>
+  );
+}
+
 function MediaRow({
   title,
   items,
   onSelect,
-  wide = false,
-  isTrending = false,
+  isTop10 = false,
   onRemove,
-  showTitle = false,
+  onViewAll,
 }: {
   title: ReactNode;
   items: MediaSummary[];
   onSelect: (item: MediaSummary) => void;
-  wide?: boolean;
-  isTrending?: boolean;
+  isTop10?: boolean;
   onRemove?: (item: MediaSummary) => void;
-  showTitle?: boolean;
+  onViewAll?: () => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -127,300 +237,155 @@ function MediaRow({
 
   const scrollLeft = () => {
     trackRef.current?.scrollBy({
-      left: -(window.innerWidth * 0.7),
+      left: -(window.innerWidth * 0.6),
       behavior: "smooth",
     });
   };
   const scrollRight = () => {
     trackRef.current?.scrollBy({
-      left: window.innerWidth * 0.7,
+      left: window.innerWidth * 0.6,
       behavior: "smooth",
     });
   };
 
   return (
-    <section className='discover-row relative'>
-      <div className='discover-row-header'>
-        <h2 className='discover-row-title'>{title}</h2>
+    <section className="discover-row relative my-6">
+      <div className="flex items-center justify-between mb-3 px-1">
+        <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+          {title}
+        </h2>
+        {onViewAll && (
+          <button
+            onClick={onViewAll}
+            className="flex items-center gap-1 text-xs font-semibold text-white/70 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all"
+            type="button"
+          >
+            <span>View All</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
-      <div className='relative group'>
-        {/* Left arrow */}
+      <div className="relative group/track">
         <button
-          className='absolute left-0 top-0 bottom-0 z-20 w-14 bg-linear-to-r from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center'
+          className="absolute left-0 top-0 bottom-0 z-30 w-10 bg-gradient-to-r from-black/90 via-black/50 to-transparent opacity-0 group-hover/track:opacity-100 transition-opacity flex items-center justify-center text-white"
           onClick={scrollLeft}
-          aria-label='Scroll left'
+          aria-label="Scroll left"
+          type="button"
         >
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            className='w-7 h-7 text-white drop-shadow'
-            fill='none'
-            viewBox='0 0 24 24'
-            stroke='currentColor'
-            strokeWidth={2.5}
-          >
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              d='M15 19l-7-7 7-7'
-            />
-          </svg>
+          <ChevronLeft className="w-6 h-6 text-white drop-shadow-md" />
         </button>
 
-        <div className='discover-row-track no-scrollbar' ref={trackRef}>
-          {/* leading padding */}
-          <div className='shrink-0 w-5 md:w-8' />
-          {items.map((item, index) => (
-            <div
-              key={`${item.mediaType}-${item.id}`}
-              className={`relative flex items-end shrink-0 ${isTrending ? "trending-rank-wrapper" : ""}`}
-            >
-              {isTrending && (
-                <div className='trending-rank-number' data-n={index + 1}>
-                  {index + 1}
-                </div>
-              )}
-              <button
-                className={`discover-card relative ${wide ? "discover-card-wide" : ""} ${isTrending ? "relative z-[2]" : ""}`}
-                onClick={() => onSelect(item)}
-                type='button'
-              >
-                <Image
-                  src={tmdbImage(
-                    wide
-                      ? item.backdropPath || item.posterPath
-                      : item.posterPath || item.backdropPath,
-                    wide ? "w780" : "w500",
-                  )}
-                  alt={item.title}
-                  fill
-                  sizes={wide ? "320px" : "180px"}
-                  className='object-cover'
-                />
-                {/* Title overlay for wide/landscape cards */}
-                {(wide || showTitle) && (
-                  <div className='absolute inset-x-0 bottom-0 bg-linear-to-t from-black/90 via-black/40 to-transparent px-3 pt-6 pb-2 pointer-events-none'>
-                    <p className='text-white text-xs font-bold line-clamp-1 drop-shadow-md'>
-                      {item.title}
-                    </p>
-                    {item.year && (
-                      <p className='text-white/50 text-[10px]'>{item.year}</p>
-                    )}
-                  </div>
-                )}
-                {onRemove && (
-                  <div
-                    className='absolute top-2 right-2 bg-black/60 rounded-full p-1 hover:bg-red-600 transition-colors z-20'
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemove(item);
-                    }}
-                  >
-                    <X className='w-4 h-4 text-white' />
-                  </div>
-                )}
-              </button>
-            </div>
-          ))}
-          {/* trailing padding */}
-          <div className='shrink-0 w-5 md:w-8' />
+        <div
+          className="flex items-center gap-3.5 sm:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
+          ref={trackRef}
+        >
+          {items.map((item, index) =>
+            isTop10 ? (
+              <Top10Card
+                key={`top10-${item.mediaType}-${item.id}`}
+                item={item}
+                rank={index + 1}
+                onSelect={onSelect}
+              />
+            ) : (
+              <MediaCard
+                key={`${item.mediaType}-${item.id}`}
+                item={item}
+                onSelect={onSelect}
+                onRemove={onRemove}
+              />
+            )
+          )}
         </div>
 
-        {/* Right arrow */}
         <button
-          className='absolute right-0 top-0 bottom-0 z-20 w-14 bg-linear-to-l from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center'
+          className="absolute right-0 top-0 bottom-0 z-30 w-10 bg-gradient-to-l from-black/90 via-black/50 to-transparent opacity-0 group-hover/track:opacity-100 transition-opacity flex items-center justify-center text-white"
           onClick={scrollRight}
-          aria-label='Scroll right'
+          aria-label="Scroll right"
+          type="button"
         >
-          <svg
-            xmlns='http://www.w3.org/2000/svg'
-            className='w-7 h-7 text-white drop-shadow'
-            fill='none'
-            viewBox='0 0 24 24'
-            stroke='currentColor'
-            strokeWidth={2.5}
-          >
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              d='M9 5l7 7-7 7'
-            />
-          </svg>
+          <ChevronRight className="w-6 h-6 text-white drop-shadow-md" />
         </button>
-
-        {/* Right-edge gradient fade */}
-        <div className='pointer-events-none absolute top-0 right-0 h-full w-24 bg-linear-to-l from-black to-transparent z-10' />
       </div>
     </section>
   );
 }
 
-function LazyMyListRow({
-  animationIndex,
-  onSelect,
+function StudiosSection({
+  onSelectProvider,
 }: {
-  animationIndex: number;
-  onSelect: (item: MediaSummary) => void;
+  onSelectProvider: (slug: string) => void;
 }) {
-  const { user } = useAuth();
-  const { ref, visible } = useRevealOnScroll();
-  const [items, setItems] = useState<MediaSummary[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!user || !visible || loaded) return;
-    fetch("/api/library")
-      .then((r) => r.json())
-      .then((data) => setItems(data.results ?? []))
-      .catch(() => setItems([]))
-      .finally(() => setLoaded(true));
-  }, [user, visible, loaded]);
-
-  if (!user) return null;
+  const scrollLeft = () => {
+    trackRef.current?.scrollBy({ left: -380, behavior: "smooth" });
+  };
+  const scrollRight = () => {
+    trackRef.current?.scrollBy({ left: 380, behavior: "smooth" });
+  };
 
   return (
-    <div ref={ref}>
-      {!visible || !loaded ? (
-        <div aria-hidden className='discover-row-placeholder' />
-      ) : !items.length ? null : (
-        <div
-          className='discover-row-enter'
-          style={{ animationDelay: `${80 + animationIndex * 90}ms` }}
-        >
-          <MediaRow items={items} onSelect={onSelect} title='My List' />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProviderRowTitle({
-  slug,
-  mediaLabel,
-}: {
-  slug: string;
-  mediaLabel: string;
-}) {
-  const logo = providerLogoMap[slug];
-
-  return (
-    <span className='flex flex-wrap items-center gap-2.5'>
-      <span>{mediaLabel} on</span>
-      {logo ? (
-        <img
-          alt=''
-          className='h-5 w-auto object-contain mix-blend-screen brightness-200'
-          src={logo}
-        />
-      ) : null}
-    </span>
-  );
-}
-
-function LazyProviderRow({
-  animationIndex,
-  mediaLabel,
-  onSelect,
-  slug,
-  mediaType,
-}: {
-  animationIndex: number;
-  mediaLabel: string;
-  onSelect: (item: MediaSummary) => void;
-  slug: string;
-  mediaType: "movie" | "tv";
-}) {
-  const { ref, visible } = useRevealOnScroll();
-  const [items, setItems] = useState<MediaSummary[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!visible || loaded) return;
-
-    fetch(`/api/discover/provider?slug=${slug}`)
-      .then((response) => response.json())
-      .then((payload) => setItems(payload.results ?? []))
-      .catch(() => setItems([]))
-      .finally(() => setLoaded(true));
-  }, [loaded, slug, visible]);
-
-  const filtered = useMemo(
-    () => items.filter((item) => item.mediaType === mediaType),
-    [items, mediaType],
-  );
-
-  return (
-    <div ref={ref}>
-      {!visible || !loaded ? (
-        <div aria-hidden className='discover-row-placeholder' />
-      ) : !filtered.length ? null : (
-        <div
-          className='discover-row-enter'
-          style={{ animationDelay: `${80 + animationIndex * 90}ms` }}
-        >
-          <MediaRow
-            items={filtered}
-            onSelect={onSelect}
-            title={<ProviderRowTitle mediaLabel={mediaLabel} slug={slug} />}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BannerSlideContent({
-  item,
-  onInfo,
-}: {
-  item: MediaSummary;
-  onInfo: () => void;
-}) {
-  return (
-    <>
-      {item.logoPath ? (
-        <Image
-          src={tmdbImage(item.logoPath, "w500")}
-          alt={item.title}
-          width={520}
-          height={180}
-          className='mb-4 h-auto max-h-24 md:max-h-40 w-auto max-w-[min(100%,32rem)] object-contain object-left drop-shadow-[0_0_30px_rgba(255,255,255,0.18)]'
-        />
-      ) : (
-        <h1 className='text-4xl font-black uppercase tracking-tight drop-shadow-[0_0_30px_rgba(255,255,255,0.18)] md:text-6xl mb-4'>
-          {item.title}
-        </h1>
-      )}
-      <p className='mt-2 line-clamp-3 max-w-2xl text-sm leading-6 text-white md:text-lg text-shadow-md font-medium'>
-        {item.overview}
-      </p>
-      <div className='mt-6 flex flex-wrap gap-3'>
-        <Link
-          className='primary-button bg-white text-black hover:bg-white/80 font-bold px-6 py-2 rounded-md flex items-center gap-2'
-          href={watchHref(item)}
-        >
-          <Play className='size-6 fill-current' />
-          Play
-        </Link>
+    <section className="my-8 px-1">
+      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight mb-3">
+        Studios
+      </h2>
+      <div className="relative group/studios">
         <button
-          className='ghost-button bg-zinc-500/70 hover:bg-zinc-500/50 text-white font-bold px-6 py-2 rounded-md flex items-center gap-2'
-          onClick={onInfo}
-          type='button'
+          className="absolute left-0 top-0 bottom-0 z-30 w-10 bg-gradient-to-r from-black/90 to-transparent opacity-0 group-hover/studios:opacity-100 transition-opacity flex items-center justify-center text-white"
+          onClick={scrollLeft}
+          aria-label="Scroll left"
+          type="button"
         >
-          <Info className='size-6' /> More Info
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+
+        <div
+          ref={trackRef}
+          className="flex items-center gap-4.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
+        >
+          {STUDIO_NETWORKS.map((p) => (
+            <div
+              key={p.slug}
+              onClick={() => onSelectProvider(p.slug)}
+              className="relative flex items-center justify-center shrink-0 w-52 sm:w-60 md:w-64 h-24 sm:h-28 md:h-30 rounded-lg bg-[#1e232d] hover:bg-[#282f3d] border border-white/5 shadow-xl transition-all duration-300 cursor-pointer p-6 group/card hover:scale-[1.02]"
+            >
+              <img
+                src={p.logo}
+                alt={p.name}
+                className="max-h-7 sm:max-h-9 w-auto max-w-[60%] object-contain brightness-0 invert group-hover/card:brightness-100 group-hover/card:invert-0 transition-all duration-300"
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          className="absolute right-0 top-0 bottom-0 z-30 w-10 bg-gradient-to-l from-black/90 to-transparent opacity-0 group-hover/studios:opacity-100 transition-opacity flex items-center justify-center text-white"
+          onClick={scrollRight}
+          aria-label="Scroll right"
+          type="button"
+        >
+          <ChevronRight className="w-5 h-5" />
         </button>
       </div>
-    </>
+    </section>
   );
 }
 
 export function DiscoverApp({ data }: { data: DiscoverPageData }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "home";
   const genreId = Number(searchParams.get("genre"));
   const genreType = searchParams.get("type") as "movie" | "tv";
 
   const [bannerIndex, setBannerIndex] = useState(0);
+  const [isPlayingVideo, setIsPlayingVideo] = useState(true);
+  const [isMuted, setIsMuted] = useState(true);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const thumbTrackRef = useRef<HTMLDivElement>(null);
+
   const [continueWatching, setContinueWatching] = useState<MediaSummary[]>([]);
   const [selected, setSelected] = useState<MediaSummary | null>(null);
   const [detail, setDetail] = useState<MediaDetail | null>(null);
@@ -428,6 +393,16 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
   const [genreResults, setGenreResults] = useState<MediaSummary[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
+
+  // CineSrc preloading for active banner item
+  const isBackend =
+    (process.env.NEXT_PUBLIC_STREAM_PROVIDER || "cinesrc") === "backend";
+  const [bannerIframeLoaded, setBannerIframeLoaded] = useState(false);
+  const [bannerShowFullscreen, setBannerShowFullscreen] = useState(false);
+  const [bannerPreloadSrc, setBannerPreloadSrc] = useState<string | null>(null);
+  
+  const bannerIframeRef = useRef<HTMLIFrameElement>(null);
+  const bannerContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setContinueWatching(getContinueWatching());
@@ -438,18 +413,193 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     setContinueWatching(getContinueWatching());
   };
 
-  const bannerItems = data.bannerItems.length
-    ? data.bannerItems
-    : data.trendingWeek;
-  const activeBanner = bannerItems[bannerIndex % bannerItems.length];
+  const filteredBannerItems = useMemo(() => {
+    const rawBanner = data.bannerItems.length
+      ? data.bannerItems
+      : data.trendingWeek;
 
+    if (tab === "movies") {
+      const movies = rawBanner.filter((i) => i.mediaType === "movie");
+      return movies.length ? movies : data.trendingMovies.slice(0, 8);
+    }
+    if (tab === "shows") {
+      const tv = rawBanner.filter((i) => i.mediaType === "tv");
+      return tv.length ? tv : data.trendingTv.slice(0, 8);
+    }
+    return rawBanner;
+  }, [tab, data.bannerItems, data.trendingWeek, data.trendingMovies, data.trendingTv]);
+
+  const bannerCount = filteredBannerItems.length;
+  const activeBanner = bannerCount > 0 ? filteredBannerItems[bannerIndex % bannerCount] : undefined;
+
+  const [videoLoaded, setVideoLoaded] = useState(false);
+
+  const [bannerProgress, setBannerProgress] = useState<WatchProgress | null>(null);
+
+  // Initialize/Reset banner CineSrc preloading whenever the active banner item changes
   useEffect(() => {
-    if (bannerItems.length <= 1) return;
-    const timer = window.setInterval(() => {
-      setBannerIndex((current) => (current + 1) % bannerItems.length);
-    }, 8000);
-    return () => window.clearInterval(timer);
-  }, [bannerItems.length]);
+    setVideoLoaded(false);
+    if (activeBanner) {
+      setBannerProgress(getWatchProgress(activeBanner.mediaType, activeBanner.id));
+    } else {
+      setBannerProgress(null);
+    }
+    if (!isBackend && activeBanner) {
+      setBannerIframeLoaded(false);
+      setBannerShowFullscreen(false);
+    }
+  }, [activeBanner, isBackend, bannerIndex]);
+
+  // YouTube IFrame Player API initialization (Without loop=1, state 0 ENDED fires reliably!)
+  useEffect(() => {
+    if (!activeBanner?.trailerKey || typeof window === "undefined") return;
+
+    if (!window.YT) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube-nocookie.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName("script")[0];
+      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+    }
+
+    let playerInstance: unknown = null;
+    const iframeId = `banner-yt-player-${activeBanner.id}`;
+
+    const initPlayer = () => {
+      if (!window.YT?.Player) return;
+      try {
+        playerInstance = new window.YT.Player(iframeId, {
+          events: {
+            onReady: () => {
+              setVideoLoaded(true);
+            },
+            onStateChange: (event: { data: number }) => {
+              if (event.data === 1) {
+                setVideoLoaded(true);
+              }
+              if (event.data === 0) {
+                setBannerIndex((current) =>
+                  bannerCount > 0 ? (current + 1) % bannerCount : 0
+                );
+              }
+            },
+          },
+        });
+      } catch {
+        // Player error
+      }
+    };
+
+    if (window.YT?.Player) {
+      initPlayer();
+    } else {
+      window.onYouTubeIframeAPIReady = initPlayer;
+    }
+
+    return () => {
+      if (playerInstance && typeof (playerInstance as { destroy?: () => void }).destroy === "function") {
+        (playerInstance as { destroy: () => void }).destroy();
+      }
+    };
+  }, [activeBanner, filteredBannerItems.length]);
+
+  // Fallback timer (18 seconds) if item has no trailer key
+  useEffect(() => {
+    if (!activeBanner || activeBanner.trailerKey || bannerCount === 0) return;
+    const timer = window.setTimeout(() => {
+      setBannerIndex((current) => (current + 1) % bannerCount);
+    }, 18000);
+    return () => window.clearTimeout(timer);
+  }, [activeBanner, bannerIndex, bannerCount]);
+
+  // CineSrc message handler for active banner item iframe
+  useEffect(() => {
+    if (isBackend) return;
+    const handler = (event: MessageEvent) => {
+      const origin = event.origin || "";
+      if (!origin.includes("cinesrc.st") && !origin.includes("cinesrc.net")) return;
+      if (bannerIframeRef.current && event.source !== bannerIframeRef.current.contentWindow) return;
+      
+      const data = event.data;
+      if (!data) return;
+      const eventType = data.type || data.event || "";
+      if (
+        eventType === "MEDIA_DATA" ||
+        eventType === "play" ||
+        eventType === "timeupdate" ||
+        eventType === "cinesrc:play" ||
+        eventType === "cinesrc:timeupdate" ||
+        eventType === "cinesrc:loadedmetadata" ||
+        eventType === "cinesrc:ready" ||
+        eventType === "ready"
+      ) {
+        setBannerIframeLoaded(true);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [isBackend]);
+
+  // Sync banner native fullscreen change
+  useEffect(() => {
+    const handler = () => {
+      if (!document.fullscreenElement) setBannerShowFullscreen(false);
+    };
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  const openBannerCinesrcFullscreen = () => {
+    setBannerShowFullscreen(true);
+    bannerContainerRef.current?.requestFullscreen?.().catch(() => {});
+  };
+
+  const closeBannerCinesrcFullscreen = () => {
+    setBannerShowFullscreen(false);
+    if (activeBanner) {
+      setBannerProgress(getWatchProgress(activeBanner.mediaType, activeBanner.id));
+    }
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  };
+
+  const getBannerMetaString = (item: MediaSummary) => {
+    const allGenres = [...data.movieGenres, ...data.tvGenres];
+    const genreNames = item.genreIds
+      ? item.genreIds
+          .map((id) => allGenres.find((g) => g.id === id)?.name)
+          .filter(Boolean)
+          .slice(0, 2)
+      : [];
+
+    const rating = item.voteAverage ? item.voteAverage.toFixed(1) : "6.5";
+    const year = item.year || "2026";
+    const genres = genreNames.length
+      ? genreNames.join(" · ")
+      : item.mediaType === "movie"
+      ? "Movie"
+      : "Series";
+
+    return `★ ${rating} · ${year} · ${genres}`;
+  };
+
+  const togglePlayVideo = () => {
+    if (!iframeRef.current) return;
+    const func = isPlayingVideo ? "pauseVideo" : "playVideo";
+    iframeRef.current.contentWindow?.postMessage(
+      JSON.stringify({ event: "command", func, args: "" }),
+      "*"
+    );
+    setIsPlayingVideo(!isPlayingVideo);
+  };
+
+  const toggleMuteVideo = () => {
+    if (!iframeRef.current) return;
+    const func = isMuted ? "unMute" : "mute";
+    iframeRef.current.contentWindow?.postMessage(
+      JSON.stringify({ event: "command", func, args: "" }),
+      "*"
+    );
+    setIsMuted(!isMuted);
+  };
 
   useEffect(() => {
     if (tab !== "genre" || !genreId || !genreType) return;
@@ -477,7 +627,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     setDetailLoading(true);
     try {
       const response = await fetch(
-        `/api/details?type=${item.mediaType}&id=${item.id}`,
+        `/api/details?type=${item.mediaType}&id=${item.id}`
       );
       const payload = await response.json();
       if (!response.ok)
@@ -496,23 +646,46 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     <>
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
-          items={continueWatching}
+          items={data.trendingMoviesToday.slice(0, 10)}
           onSelect={openDetail}
-          title='Continue Watching'
-          onRemove={handleRemoveContinue}
-          wide
+          title="Trending Right Now"
+          isTop10
+          onViewAll={() => router.push("/discover?tab=movies")}
         />
       </LazyRevealRow>
 
-      <LazyMyListRow animationIndex={rowIndex++} onSelect={openDetail} />
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.latestMovies}
+          onSelect={openDetail}
+          title="New Movies"
+          onViewAll={() => router.push("/discover?tab=movies")}
+        />
+      </LazyRevealRow>
+
+      <StudiosSection
+        onSelectProvider={(slug) =>
+          router.push(`/discover?tab=provider&provider=${slug}`)
+        }
+      />
+
+      {continueWatching.length > 0 && (
+        <LazyRevealRow animationIndex={rowIndex++}>
+          <MediaRow
+            items={continueWatching}
+            onSelect={openDetail}
+            title="Continue Watching"
+            onRemove={handleRemoveContinue}
+          />
+        </LazyRevealRow>
+      )}
 
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
-          items={data.trendingMoviesToday.slice(0, 10)}
+          items={data.topRatedTv}
           onSelect={openDetail}
-          title='Top 10 Movies Today'
-          wide
-          isTrending
+          title="Top Rated Series"
+          onViewAll={() => router.push("/discover?tab=shows")}
         />
       </LazyRevealRow>
 
@@ -520,49 +693,10 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
         <MediaRow
           items={data.topRatedMovies}
           onSelect={openDetail}
-          title='Top Rated Movies'
+          title="Top Rated Movies"
+          onViewAll={() => router.push("/discover?tab=movies")}
         />
       </LazyRevealRow>
-
-      {PROVIDER_SLUGS.map((slug) => (
-        <LazyProviderRow
-          key={`movie-${slug}`}
-          animationIndex={rowIndex++}
-          mediaLabel='Movies'
-          slug={slug}
-          mediaType='movie'
-          onSelect={openDetail}
-        />
-      ))}
-
-      <LazyRevealRow animationIndex={rowIndex++}>
-        <MediaRow
-          items={data.trendingTvToday.slice(0, 10)}
-          onSelect={openDetail}
-          title='Top 10 Series Today'
-          wide
-          isTrending
-        />
-      </LazyRevealRow>
-
-      <LazyRevealRow animationIndex={rowIndex++}>
-        <MediaRow
-          items={data.topRatedTv}
-          onSelect={openDetail}
-          title='Top Rated Series'
-        />
-      </LazyRevealRow>
-
-      {PROVIDER_SLUGS.map((slug) => (
-        <LazyProviderRow
-          key={`tv-${slug}`}
-          animationIndex={rowIndex++}
-          mediaLabel='Series'
-          slug={slug}
-          mediaType='tv'
-          onSelect={openDetail}
-        />
-      ))}
     </>
   );
 
@@ -570,30 +704,26 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     <>
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
-          items={data.trendingMoviesToday.slice(0, 10)}
+          items={data.trendingMoviesToday}
           onSelect={openDetail}
-          title='Top 10 Movies Today'
-          wide
-          isTrending
+          title="Trending Movies"
+          isTop10
+        />
+      </LazyRevealRow>
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.latestMovies}
+          onSelect={openDetail}
+          title="New Movies"
         />
       </LazyRevealRow>
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
           items={data.topRatedMovies}
           onSelect={openDetail}
-          title='Top Rated Movies'
+          title="Top Rated Movies"
         />
       </LazyRevealRow>
-      {PROVIDER_SLUGS.map((slug) => (
-        <LazyProviderRow
-          key={`movie-${slug}`}
-          animationIndex={rowIndex++}
-          mediaLabel='Movies'
-          slug={slug}
-          mediaType='movie'
-          onSelect={openDetail}
-        />
-      ))}
     </>
   );
 
@@ -601,46 +731,43 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     <>
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
-          items={data.trendingTvToday.slice(0, 10)}
+          items={data.trendingTvToday}
           onSelect={openDetail}
-          title='Top 10 Series Today'
-          wide
-          isTrending
+          title="Trending Series"
+          isTop10
+        />
+      </LazyRevealRow>
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.latestTv}
+          onSelect={openDetail}
+          title="New Series"
         />
       </LazyRevealRow>
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
           items={data.topRatedTv}
           onSelect={openDetail}
-          title='Top Rated Series'
+          title="Top Rated Series"
         />
       </LazyRevealRow>
-      {PROVIDER_SLUGS.map((slug) => (
-        <LazyProviderRow
-          key={`tv-${slug}`}
-          animationIndex={rowIndex++}
-          mediaLabel='Series'
-          slug={slug}
-          mediaType='tv'
-          onSelect={openDetail}
-        />
-      ))}
     </>
   );
 
   const renderGenreRows = () => {
     if (genreLoading)
       return (
-        <div className='empty-state min-h-40 mt-12'>Loading genre picks...</div>
+        <div className="empty-state min-h-40 mt-12 text-white/60">
+          Loading genre picks...
+        </div>
       );
     return (
-      <div className='mt-8'>
+      <div className="mt-8">
         <LazyRevealRow animationIndex={rowIndex++}>
           <MediaRow
             items={genreResults}
             onSelect={openDetail}
-            title='Genre Picks'
-            wide
+            title="Genre Picks"
           />
         </LazyRevealRow>
       </div>
@@ -648,70 +775,227 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   };
 
   return (
-    <main className='discover-shell pb-24 md:pb-20 bg-black min-h-screen'>
+    <main className="discover-shell bg-black min-h-screen pl-0 md:pl-[72px] transition-all duration-300">
       <StreamnNav />
 
-      {tab !== "genre" && (
-        <section className='discover-banner relative z-10 mt-[-80px]'>
-          {bannerItems.length ? (
-            <>
-              {bannerItems.slice(0, 5).map((item, index) => (
-                <div
-                  className={`discover-banner-slide ${index === bannerIndex % bannerItems.length ? "discover-banner-slide-active" : ""}`}
-                  key={`${item.mediaType}-${item.id}`}
-                >
-                  <Image
-                    src={tmdbImage(
-                      item.backdropPath || item.posterPath,
-                      "original",
-                    )}
-                    alt=''
-                    fill
-                    priority={index === 0}
-                    sizes='100vw'
-                    className='object-cover'
-                  />
-                </div>
-              ))}
-              <div className='absolute inset-0 bg-linear-to-t from-black via-black/40 to-transparent z-2' />
-              <div className='absolute inset-0 bg-linear-to-r from-black/80 via-black/20 to-transparent z-2' />
-              {activeBanner ? (
-                <button
-                  className='discover-banner-click-area z-3'
-                  onClick={() => openDetail(activeBanner)}
-                  type='button'
-                  aria-label='Open banner details'
+      {/* Hero Banner Section */}
+      {tab !== "genre" && activeBanner && (
+        <section className="relative w-full h-[80vh] min-h-[520px] overflow-hidden bg-black select-none">
+          {/* Video Backdrop Container (Mobile gets high-res backdrop image, Desktop gets video trailer) */}
+          <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+            {/* Mobile backdrop image */}
+            <div className="md:hidden relative w-full h-full">
+              <Image
+                src={tmdbImage(
+                  activeBanner.backdropPath || activeBanner.posterPath,
+                  "original"
+                )}
+                alt={activeBanner.title}
+                fill
+                priority
+                className="object-cover object-top opacity-80"
+              />
+            </div>
+
+            {/* Desktop backdrop video trailer fading smoothly over high-res image */}
+            <div className="hidden md:block relative w-full h-full">
+              <Image
+                src={tmdbImage(
+                  activeBanner.backdropPath || activeBanner.posterPath,
+                  "original"
+                )}
+                alt={activeBanner.title}
+                fill
+                priority
+                className="object-cover object-top opacity-80"
+              />
+              {activeBanner.trailerKey && (
+                <iframe
+                  id={`banner-yt-player-${activeBanner.id}`}
+                  ref={iframeRef}
+                  src={`https://www.youtube-nocookie.com/embed/${activeBanner.trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1`}
+                  className={`w-[170%] h-[170%] absolute top-0 left-1/2 -translate-x-1/2 object-cover pointer-events-none scale-125 min-w-full min-h-full transition-opacity duration-700 ${
+                    videoLoaded ? "opacity-80" : "opacity-0"
+                  }`}
+                  allow="autoplay; encrypted-media"
+                  title="Backdrop Trailer"
                 />
-              ) : null}
-              <div className='discover-banner-inner z-4 pt-[120px]'>
-                <div className='discover-banner-copy-stack'>
-                  {bannerItems.slice(0, 5).map((item, index) => (
-                    <div
-                      className={`discover-banner-copy ${index === bannerIndex % bannerItems.length ? "discover-banner-copy-active" : ""}`}
-                      key={`content-${item.mediaType}-${item.id}`}
-                    >
-                      <BannerSlideContent
-                        item={item}
-                        onInfo={() => openDetail(item)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : null}
+              )}
+            </div>
+          </div>
+
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent z-10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
+
+          {/* Desktop Pause and Mute controls placed at FAR RIGHT EDGE of Banner */}
+          <div className="hidden md:flex absolute right-8 md:right-16 top-1/2 -translate-y-1/2 z-30 flex-col gap-3.5">
+            <button
+              onClick={togglePlayVideo}
+              className="w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105"
+              type="button"
+              aria-label={isPlayingVideo ? "Pause video" : "Play video"}
+            >
+              {isPlayingVideo ? (
+                <Pause className="w-5 h-5 fill-current" />
+              ) : (
+                <Play className="w-5 h-5 fill-current ml-0.5" />
+              )}
+            </button>
+            <button
+              onClick={toggleMuteVideo}
+              className="w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105"
+              type="button"
+              aria-label={isMuted ? "Unmute video" : "Mute video"}
+            >
+              {isMuted ? (
+                <VolumeX className="w-5 h-5" />
+              ) : (
+                <Volume2 className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+
+          {/* Banner Copy Stack */}
+          <div className="absolute inset-x-6 md:left-14 md:right-auto bottom-20 z-20 max-w-xl flex flex-col items-center text-center md:items-start md:text-left mx-auto md:mx-0 gap-3.5">
+            {activeBanner.logoPath ? (
+              <Image
+                src={tmdbImage(activeBanner.logoPath, "w500")}
+                alt={activeBanner.title}
+                width={440}
+                height={140}
+                priority
+                className="h-auto max-h-14 sm:max-h-20 md:max-h-32 w-auto max-w-[min(100%,26rem)] object-contain object-center md:object-left drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
+              />
+            ) : (
+              <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]">
+                {activeBanner.title}
+              </h1>
+            )}
+
+            <div className="flex items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md">
+              <span>{getBannerMetaString(activeBanner)}</span>
+            </div>
+
+            <p className="text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal">
+              {activeBanner.overview}
+            </p>
+
+            {/* Action Buttons: Centered on Mobile, Left-aligned on Desktop */}
+            <div className="flex items-center justify-center md:justify-start gap-3 w-full pt-1">
+              {isBackend ? (
+                <Link
+                  href={watchHref(activeBanner)}
+                  className="px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
+                >
+                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                  <span>{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
+                </Link>
+              ) : !bannerIframeLoaded ? (
+                <button
+                  disabled
+                  className="px-5 py-2.5 rounded-full bg-white/70 text-black/70 font-bold flex items-center gap-2 shadow-2xl cursor-not-allowed shrink-0"
+                  type="button"
+                >
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading Player...</span>
+                </button>
+              ) : (
+                <button
+                  onClick={openBannerCinesrcFullscreen}
+                  className="px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0 cursor-pointer"
+                  type="button"
+                >
+                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                  <span>{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => openDetail(activeBanner)}
+                className="w-10 h-10 md:w-auto md:h-auto rounded-full bg-black/50 hover:bg-white/20 border border-white/30 backdrop-blur-md text-white font-semibold text-xs md:text-sm transition-all flex items-center justify-center md:px-4 md:py-2 md:gap-2 shrink-0"
+                type="button"
+                aria-label="See More"
+              >
+                <Info className="w-4 h-4" />
+                <span className="hidden md:inline">See More</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Banner Carousel Indicator: Centered on Mobile, Right-aligned on Desktop */}
+          <div className="absolute left-1/2 -translate-x-1/2 md:left-auto md:right-16 md:translate-x-0 bottom-4 z-20 flex items-center gap-2 max-w-[92vw] md:max-w-[60vw]">
+            <button
+              className="w-7 h-7 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center shrink-0 border border-white/10"
+              onClick={() =>
+                setBannerIndex(
+                  (current) =>
+                    (current - 1 + filteredBannerItems.length) %
+                    filteredBannerItems.length
+                )
+              }
+              type="button"
+              aria-label="Previous banner"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div
+              ref={thumbTrackRef}
+              className="flex items-center gap-2.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
+            >
+              {filteredBannerItems.slice(0, 8).map((item, index) => {
+                const isActive =
+                  bannerCount > 0 && index === bannerIndex % bannerCount;
+                return (
+                  <div
+                    key={`thumb-${item.mediaType}-${item.id}`}
+                    onClick={() => setBannerIndex(index)}
+                    className={`relative w-20 sm:w-24 aspect-[16/9] rounded-lg overflow-hidden cursor-pointer shrink-0 transition-all duration-300 ${
+                      isActive
+                        ? "ring-2 ring-white border-2 border-white scale-105 shadow-2xl z-10"
+                        : "opacity-60 hover:opacity-100 border border-white/10"
+                    }`}
+                  >
+                    <Image
+                      src={tmdbImage(
+                        item.backdropPath || item.posterPath,
+                        "w300"
+                      )}
+                      alt={item.title}
+                      fill
+                      sizes="100px"
+                      className="object-cover"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              className="w-7 h-7 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center shrink-0 border border-white/10"
+              onClick={() =>
+                setBannerIndex(
+                  (current) => (current + 1) % filteredBannerItems.length
+                )
+              }
+              type="button"
+              aria-label="Next banner"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </section>
       )}
 
-      <section
-        className={`relative z-10 mx-auto w-full max-w-[100vw] overflow-hidden px-4 md:px-6 py-8 ${tab === "genre" ? "pt-24" : "-mt-16"}`}
-      >
+      {/* Rows Section Container */}
+      <section className="relative z-10 px-4 sm:px-8 md:px-12 py-4 pb-24">
         {tab === "home" && renderHomeRows()}
         {tab === "movies" && renderMoviesRows()}
         {tab === "shows" && renderShowsRows()}
         {tab === "genre" && renderGenreRows()}
       </section>
 
+      {/* Media Detail Modal */}
       <ResponsiveMediaModal
         description={selected?.overview ?? "Media details"}
         onOpenChange={(open) => {
@@ -726,6 +1010,29 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
           <MediaDetailContent detail={detail} onSelect={openDetail} />
         )}
       </ResponsiveMediaModal>
+
+      {/* CineSrc Banner Preloader Iframe container */}
+      {!isBackend && activeBanner && (
+        <div
+          ref={bannerContainerRef}
+          onClick={(e) => e.stopPropagation()}
+          className={`fixed inset-0 bg-black transition-opacity duration-300 ${
+            bannerShowFullscreen
+              ? "opacity-100 z-[9999] pointer-events-auto"
+              : "opacity-0 -z-10 pointer-events-none"
+          }`}
+        >
+          <IframePlayer
+            mediaType={activeBanner.mediaType}
+            mediaId={activeBanner.id}
+            season={1}
+            episode={1}
+            item={activeBanner}
+            onReady={() => setBannerIframeLoaded(true)}
+            onClose={closeBannerCinesrcFullscreen}
+          />
+        </div>
+      )}
     </main>
   );
 }

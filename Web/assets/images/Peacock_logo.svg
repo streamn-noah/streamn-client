@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 130" fill="currentColor">
+  <path fill="#000000" d="M0 0h500v130H0z" opacity="0"/>
+  <g fill="currentColor">
+    <!-- Peacock text logo shape -->
+    <text x="10" y="90" font-family="system-ui, -apple-system, sans-serif" font-size="88" font-weight="900" letter-spacing="-2">peacock</text>
+  </g>
+  <!-- Colorful peacock feather dots -->
+  <circle cx="395" cy="35" r="10" fill="#F47B20"/>
+  <circle cx="418" cy="22" r="10" fill="#FFC20E"/>
+  <circle cx="442" cy="20" r="10" fill="#4DB848"/>
+  <circle cx="465" cy="30" r="10" fill="#00AEEF"/>
+  <circle cx="482" cy="50" r="10" fill="#2B3990"/>
+  <circle cx="488" cy="75" r="10" fill="#92278F"/>
+</svg>

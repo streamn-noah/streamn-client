@@ -2,15 +2,16 @@
 
 import Image from "next/image";
 import {
-  Dices,
-  Loader2,
-  Search,
-  Sparkles,
-  Tv,
-  WandSparkles,
-  X,
-} from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+  RiSearch2Line,
+  RiSearch2Fill,
+  RiSparklingLine,
+  RiSparklingFill,
+  RiDice5Line,
+  RiDice5Fill,
+  RiStarFill,
+} from "@remixicon/react";
+import { Loader2, Tv, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   DetailSkeleton,
   MediaDetailContent,
@@ -38,13 +39,7 @@ const roulettePrompts = [
   "slow-burn horror",
 ];
 
-function yearAndType(item: MediaSummary) {
-  return [item.year, item.mediaType === "movie" ? "Movie" : "Series"]
-    .filter(Boolean)
-    .join(" • ");
-}
-
-function ResultsCard({
+function MediaCard({
   item,
   onSelect,
 }: {
@@ -52,30 +47,33 @@ function ResultsCard({
   onSelect: (item: MediaSummary) => void;
 }) {
   return (
-    <button
-      className='group media-card text-left'
+    <div
+      className="flex flex-col gap-1.5 shrink-0 group cursor-pointer"
       onClick={() => onSelect(item)}
-      type='button'
     >
-      <Image
-        src={tmdbImage(item.posterPath || item.backdropPath, "w500")}
-        alt=''
-        fill
-        sizes='(max-width: 768px) 44vw, 220px'
-        className='object-cover transition duration-500 group-hover:scale-105'
-      />
-      {/* <span className='absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-black/45 text-white backdrop-blur'>
-        +
-      </span> */}
-      <span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent p-4 opacity-0 transition group-hover:opacity-100'>
-        <span className='block text-base font-bold text-white'>
+      <div className="relative aspect-[1/1.4] w-full rounded-xl overflow-hidden bg-zinc-900 border border-white/5 shadow-md group-hover:-translate-y-1.5 group-hover:ring-2 group-hover:ring-white/40 group-hover:border-white/50 transition-all duration-300">
+        <Image
+          src={tmdbImage(item.posterPath || item.backdropPath, "w500")}
+          alt={item.title}
+          fill
+          sizes="(max-width: 640px) 150px, 200px"
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      </div>
+      <div className="flex flex-col gap-0.5 px-0.5">
+        <h3 className="text-white font-semibold text-xs sm:text-sm line-clamp-1 group-hover:text-white/90 transition-colors">
           {item.title}
-        </span>
-        <span className='mt-1 block text-sm text-white/65'>
-          {yearAndType(item)}
-        </span>
-      </span>
-    </button>
+        </h3>
+        <div className="flex items-center gap-1 text-[11px] sm:text-xs text-white/50 font-medium">
+          <RiStarFill className="w-3 h-3 text-white shrink-0" />
+          <span>{item.voteAverage ? item.voteAverage.toFixed(1) : "N/A"}</span>
+          <span>·</span>
+          <span>{item.year || "2026"}</span>
+          <span>·</span>
+          <span className="capitalize">{item.mediaType === "movie" ? "Movie" : "Series"}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -83,7 +81,7 @@ export function StreamnApp() {
   const [tab, setTab] = useState<TabMode>("title");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MediaSummary[]>([]);
-  const [label, setLabel] = useState("Search for a movie, show, or mood");
+  const [label, setLabel] = useState("Trending in Nigeria");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<MediaSummary | null>(null);
@@ -91,9 +89,31 @@ export function StreamnApp() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [roulettePrompt, setRoulettePrompt] = useState(roulettePrompts[0]);
 
+  // Initial fetch for trending items on mount
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    fetch("/api/search?mode=title&q=a")
+      .then((res) => res.json())
+      .then((data) => {
+        if (mounted && data.results?.length) {
+          setResults(data.results);
+          setLabel("Trending in Nigeria");
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const placeholder = useMemo(() => {
-    if (tab === "title") return "Search a movie or series title";
-    if (tab === "ai") return "Describe your mood";
+    if (tab === "title") return "Movies, shows, anime and more";
+    if (tab === "ai") return "Describe your mood (e.g. scary sci-fi comedy)";
     return "Pick a vibe and spin";
   }, [tab]);
 
@@ -103,7 +123,7 @@ export function StreamnApp() {
     setDetailLoading(true);
     try {
       const response = await fetch(
-        `/api/details?type=${item.mediaType}&id=${item.id}`,
+        `/api/details?type=${item.mediaType}&id=${item.id}`
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not load detail.");
@@ -112,7 +132,7 @@ export function StreamnApp() {
       setError(
         detailError instanceof Error
           ? detailError.message
-          : "Could not load detail.",
+          : "Could not load detail."
       );
       setSelected(null);
     } finally {
@@ -129,16 +149,16 @@ export function StreamnApp() {
     setError("");
     try {
       const response = await fetch(
-        `/api/search?mode=${tab}&q=${encodeURIComponent(query.trim())}`,
+        `/api/search?mode=${tab}&q=${encodeURIComponent(query.trim())}`
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Search failed.");
       setResults(data.results ?? []);
-      setLabel(data.label ?? `${data.results?.length ?? 0} results`);
+      setLabel(data.label ?? `Results for "${query.trim()}"`);
     } catch (searchError) {
       setResults([]);
       setError(
-        searchError instanceof Error ? searchError.message : "Search failed.",
+        searchError instanceof Error ? searchError.message : "Search failed."
       );
     } finally {
       setLoading(false);
@@ -164,7 +184,7 @@ export function StreamnApp() {
       setError(
         rouletteError instanceof Error
           ? rouletteError.message
-          : "Roulette failed.",
+          : "Roulette failed."
       );
     } finally {
       setLoading(false);
@@ -172,157 +192,191 @@ export function StreamnApp() {
   }
 
   return (
-    <main className='relative min-h-screen overflow-hidden bg-[#050101] pb-24 text-white md:pb-20'>
-      <div className='morph-bg' />
-      <div className='grain' />
-
+    <main className="relative min-h-screen bg-black text-white pl-0 md:pl-[72px] pb-24 md:pb-20 transition-all duration-300">
       <StreamnNav />
 
-      <section className='relative z-10 mx-auto flex min-h-[54vh] w-full max-w-5xl flex-col items-center justify-center px-5 pb-10 pt-28 text-center'>
-        <p className='reveal mb-3 rounded-full tracking-widest font-bold uppercase border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs text-red-200'>
-          Streamn Beta by Noah
-        </p>
-        <h1 className='reveal reveal-delay-2 max-w-3xl text-5xl font-bold leading-none tracking-tight sm:text-5xl md:text-6xl'>
-          Find the perfect thing to watch.
-        </h1>
-
-        <div className='reveal reveal-delay-2 mt-8 rounded-full border border-white/10 bg-black/35 p-1 shadow-2xl shadow-red-950/30 backdrop-blur-xl'>
-          {[
-            ["title", Search, "Title Search"],
-            ["ai", Sparkles, "AI Search"],
-            ["roulette", Dices, "Roulette"],
-          ].map(([value, Icon, labelText]) => (
+      {/* Top Search Bar Header Section */}
+      <section className="relative z-10 px-4 sm:px-8 md:px-12 pt-8 pb-4 max-w-[1500px]">
+        <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+          {/* Main Search Input */}
+          <form
+            onSubmit={onSubmit}
+            className="relative flex items-center w-full max-w-xl bg-[#161a23] border border-white/10 rounded-xl px-4 py-2.5 shadow-inner focus-within:border-white/30 transition-all"
+          >
+            {tab === "ai" ? (
+              <RiSparklingFill className="w-5 h-5 text-white shrink-0 mr-3" />
+            ) : tab === "roulette" ? (
+              <RiDice5Fill className="w-5 h-5 text-white shrink-0 mr-3" />
+            ) : (
+              <RiSearch2Line className="w-5 h-5 text-white/50 shrink-0 mr-3" />
+            )}
+            <input
+              type="text"
+              aria-label={placeholder}
+              placeholder={placeholder}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="bg-transparent text-white placeholder-white/30 text-xs sm:text-sm font-medium w-full outline-none"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="text-white/40 hover:text-white p-1 transition-colors mr-1"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
             <button
-              className={`tab-button ${tab === value ? "tab-button-active" : ""}`}
-              key={value as string}
-              onClick={() => setTab(value as TabMode)}
-              type='button'
+              type="submit"
+              disabled={loading || (tab !== "roulette" && !query.trim())}
+              className="px-3.5 py-1.5 rounded-lg bg-white text-black font-bold text-xs hover:bg-white/90 transition-colors shrink-0 disabled:opacity-40"
             >
-              <Icon className='size-4' />
-              {labelText as string}
+              {loading ? <Loader2 className="w-4 h-4 animate-spin text-black" /> : "Search"}
             </button>
-          ))}
+          </form>
+
+          {/* Search Mode Toggles (Title, AI, Roulette using Remix Icons) */}
+          <div className="flex items-center gap-2 bg-[#161a23] border border-white/10 p-1 rounded-xl shrink-0 w-fit">
+            <button
+              type="button"
+              onClick={() => setTab("title")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                tab === "title"
+                  ? "bg-white text-black shadow-md"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {tab === "title" ? (
+                <RiSearch2Fill className="w-3.5 h-3.5 text-black" />
+              ) : (
+                <RiSearch2Line className="w-3.5 h-3.5" />
+              )}
+              <span>Title</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTab("ai")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                tab === "ai"
+                  ? "bg-white text-black shadow-md"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {tab === "ai" ? (
+                <RiSparklingFill className="w-3.5 h-3.5 text-black" />
+              ) : (
+                <RiSparklingLine className="w-3.5 h-3.5" />
+              )}
+              <span>AI Search</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTab("roulette")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                tab === "roulette"
+                  ? "bg-white text-black shadow-md"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {tab === "roulette" ? (
+                <RiDice5Fill className="w-3.5 h-3.5 text-black" />
+              ) : (
+                <RiDice5Line className="w-3.5 h-3.5" />
+              )}
+              <span>Roulette</span>
+            </button>
+          </div>
         </div>
 
-        {tab === "roulette" ? (
-          <div className='mt-7 w-full max-w-3xl'>
-            <div className='flex flex-wrap justify-center gap-2'>
+        {/* AI Prompt Suggestions */}
+        {tab === "ai" && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {promptExamples.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => {
+                  setQuery(prompt);
+                }}
+                className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-xs text-white/70 hover:text-white transition-all"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Roulette Vibe Chips */}
+        {tab === "roulette" && (
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
               {roulettePrompts.map((prompt) => (
                 <button
-                  className={`prompt-chip ${roulettePrompt === prompt ? "prompt-chip-active" : ""}`}
                   key={prompt}
+                  type="button"
                   onClick={() => setRoulettePrompt(prompt)}
-                  type='button'
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    roulettePrompt === prompt
+                      ? "bg-white text-black border-white"
+                      : "bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white"
+                  }`}
                 >
                   {prompt}
                 </button>
               ))}
             </div>
             <button
-              className={`search-shell mx-auto mt-5 max-w-md justify-center ${loading ? "search-shell-loading" : ""}`}
+              type="button"
               onClick={() => spinRoulette()}
-              type='button'
+              className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-red-500 text-white font-bold text-sm shadow-xl hover:opacity-95 transition-all w-fit"
             >
               {loading ? (
-                <Loader2 className='size-5 animate-spin' />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Dices className='size-5 text-red-300' />
+                <RiDice5Fill className="w-4 h-4" />
               )}
               <span>Spin: {roulettePrompt}</span>
             </button>
           </div>
-        ) : (
-          <form
-            className={`search-shell reveal reveal-delay-3 mt-7 ${loading ? "search-shell-loading" : ""}`}
-            onSubmit={onSubmit}
-          >
-            {tab === "ai" ? (
-              <WandSparkles className='size-6 text-red-300' />
-            ) : (
-              <Search className='size-6 text-white/55' />
-            )}
-            <input
-              aria-label={placeholder}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={placeholder}
-              value={query}
-            />
-            {query ? (
-              <button
-                className='icon-button'
-                onClick={() => setQuery("")}
-                type='button'
-              >
-                <X className='size-5' />
-              </button>
-            ) : null}
-            <button
-              className='submit-button'
-              disabled={loading || !query.trim()}
-              type='submit'
-            >
-              {loading ? (
-                <Loader2 className='size-5 animate-spin' />
-              ) : (
-                <Search className='size-5' />
-              )}
-            </button>
-          </form>
         )}
-
-        {tab === "ai" ? (
-          <div className='reveal reveal-delay-4 mt-4 flex max-w-3xl flex-wrap justify-center gap-2'>
-            {promptExamples.map((prompt) => (
-              <button
-                className='prompt-chip'
-                key={prompt}
-                onClick={() => {
-                  setQuery(prompt);
-                  setTab("ai");
-                }}
-                type='button'
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </section>
 
-      <section className='relative z-10 mx-auto w-full max-w-[1500px] px-5 pb-20 md:px-10'>
-        <div className='results-heading mb-5 flex items-center justify-between'>
-          <p className='text-sm font-semibold text-white/45'>{label}</p>
-          {results.length ? (
-            <span className='text-sm text-white/35'>
-              {results.length} {results.length === 1 ? "pick" : "picks"}
-            </span>
-          ) : null}
-        </div>
+      {/* Main Grid Content Section */}
+      <section className="relative z-10 px-4 sm:px-8 md:px-12 py-4 max-w-[1500px]">
+        <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight mb-4">
+          {label}
+        </h2>
 
-        {error ? (
-          <div className='rounded-2xl border border-red-500/25 bg-red-950/30 p-4 text-sm text-red-100'>
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-950/20 p-4 text-xs text-red-200">
             {error}
           </div>
-        ) : null}
+        )}
 
-        {!results.length && !loading ? (
-          <div className='empty-state'>
-            <Tv className='size-8 text-red-300' />
-            <p>Search by title, describe a mood, or spin the roulette wheel.</p>
+        {!results.length && !loading && (
+          <div className="flex flex-col items-center justify-center min-h-[40vh] text-white/50 gap-3">
+            <Tv className="w-10 h-10 text-white/30" />
+            <p className="text-sm">No results found. Try searching for a title or mood.</p>
           </div>
-        ) : null}
+        )}
 
-        <div className='results-grid grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'>
+        {/* 7-Column Grid matching reference screenshot */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-4">
           {results.map((item) => (
-            <ResultsCard
-              item={item}
+            <MediaCard
               key={`${item.mediaType}-${item.id}`}
+              item={item}
               onSelect={loadDetails}
             />
           ))}
         </div>
       </section>
 
+      {/* Media Detail Modal */}
       <ResponsiveMediaModal
         description={selected?.overview ?? "Media details"}
         onOpenChange={(open) => {

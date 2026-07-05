@@ -1,0 +1,111 @@
+export type AudioTrackItem = {
+  label?: string;
+  language?: string;
+};
+
+export type ProviderInfo = {
+  id?: string;
+  name?: string;
+};
+
+export type SourceItem = {
+  url: string;
+  quality?: string;
+  type?: string;
+  audioTracks?: AudioTrackItem[];
+  provider?: ProviderInfo;
+};
+
+export type SubtitleItem = {
+  url: string;
+  format?: string;
+  label: string;
+};
+
+export type StreamBackendResponse = {
+  responseId?: string;
+  expiresAt?: string;
+  sources: SourceItem[];
+  subtitles: SubtitleItem[];
+  diagnostics?: Array<{
+    code: string;
+    message: string;
+    field?: string;
+    severity?: string;
+  }>;
+};
+
+// In-memory cache for stream responses to optimize modal -> watch transition
+const sourceCache = new Map<string, { data: StreamBackendResponse; timestamp: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function getCacheKey(type: "movie" | "tv", id: number, season = 1, episode = 1): string {
+  return type === "movie" ? `movie:${id}` : `tv:${id}:${season}:${episode}`;
+}
+
+export async function fetchStreamSources(
+  type: "movie" | "tv",
+  id: number,
+  season = 1,
+  episode = 1,
+  ignoreCache = false
+): Promise<StreamBackendResponse> {
+  const key = getCacheKey(type, id, season, episode);
+
+  if (!ignoreCache) {
+    const cached = sourceCache.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
+
+  const queryParams = new URLSearchParams({
+    type,
+    id: String(id),
+    season: String(season),
+    episode: String(episode),
+  });
+
+  const endpoint = `/api/stream-source?${queryParams.toString()}`;
+
+  try {
+    const res = await fetch(endpoint, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch sources: ${res.statusText}`);
+    }
+
+    const data: StreamBackendResponse = await res.json();
+    
+    // Ensure arrays exist
+    data.sources = Array.isArray(data.sources) ? data.sources : [];
+    data.subtitles = Array.isArray(data.subtitles) ? data.subtitles : [];
+
+    sourceCache.set(key, { data, timestamp: Date.now() });
+    return data;
+  } catch (error) {
+    console.error("Error fetching stream sources:", error);
+    return {
+      sources: [],
+      subtitles: [],
+    };
+  }
+}
+
+export function getCachedStreamSources(
+  type: "movie" | "tv",
+  id: number,
+  season = 1,
+  episode = 1
+): StreamBackendResponse | null {
+  const key = getCacheKey(type, id, season, episode);
+  const cached = sourceCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+  return null;
+}

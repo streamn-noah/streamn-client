@@ -2,7 +2,19 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, Film, Play, ThumbsUp, Volume2, VolumeX } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronDown,
+  Film,
+  Loader2,
+  Pause,
+  Play,
+  Star,
+  ThumbsUp,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -10,10 +22,12 @@ import {
   DetailBackdropPlayer,
   type DetailBackdropPlayerHandle,
 } from "@/components/streamn/detail-backdrop-player";
+import { IframePlayer } from "@/components/streamn/iframe-player";
 import { WatchlistPicker } from "@/components/streamn/watchlist-picker";
 import type { Episode, MediaDetail, MediaSummary } from "@/lib/media";
-import { tmdbImage } from "@/lib/media";
-import { getWatchProgress } from "@/lib/streamn-storage";
+import { cinesrcUrl, tmdbImage } from "@/lib/media";
+import { fetchStreamSources } from "@/lib/stream-source";
+import { getWatchProgress, watchHref } from "@/lib/streamn-storage";
 import { getLikedIds, likeMedia, unlikeMedia } from "@/lib/user-actions";
 
 function runtimeLabel(minutes: number | null) {
@@ -175,6 +189,41 @@ export function MediaDetailContent({
   const [liked, setLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
   const [muted, setMuted] = useState(true);
+  const [isPlayingTrailer, setIsPlayingTrailer] = useState(true);
+  const [isDescriptionVisible, setIsDescriptionVisible] = useState(true);
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Provider: "cinesrc" (default) loads via iframe; "backend" checks HLS API
+  const isBackend =
+    (process.env.NEXT_PUBLIC_STREAM_PROVIDER || "cinesrc") === "backend";
+  const cinesrcContainerRef = useRef<HTMLDivElement>(null);
+  const cinesrcIframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [showFullscreen, setShowFullscreen] = useState(false);
+
+  const startHideTimer = () => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      setIsDescriptionVisible(false);
+    }, 4500);
+  };
+
+  useEffect(() => {
+    setIsDescriptionVisible(true);
+    startHideTimer();
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [detail.id]);
+
+  const handleMouseEnter = () => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    setIsDescriptionVisible(true);
+  };
+
+  const handleMouseLeave = () => {
+    startHideTimer();
+  };
 
   useEffect(() => {
     if (!user) {
@@ -207,105 +256,326 @@ export function MediaDetailContent({
     setLikeBusy(false);
   }
 
+  const [sourceStatus, setSourceStatus] = useState<"loading" | "available" | "unavailable">(isBackend ? "loading" : "available");
+
   const firstEpisode = detail.episodes[0];
-  const saved = getWatchProgress(detail.mediaType, detail.id);
-  const season = saved?.seasonNumber ?? firstEpisode?.seasonNumber ?? 1;
-  const episode = saved?.episodeNumber ?? firstEpisode?.episodeNumber ?? 1;
-  const startSeconds = saved?.progressSeconds;
+  const [watchProgress, setWatchProgress] = useState(() =>
+    getWatchProgress(detail.mediaType, detail.id),
+  );
+  const season = watchProgress?.seasonNumber ?? firstEpisode?.seasonNumber ?? 1;
+  const episode = watchProgress?.episodeNumber ?? firstEpisode?.episodeNumber ?? 1;
+
+  // Reset iframe preload state whenever the media / episode changes
+  useEffect(() => {
+    if (!isBackend) {
+      setIframeLoaded(false);
+      setShowFullscreen(false);
+    }
+  }, [detail.id, detail.mediaType, season, episode, isBackend]);
+
+  // CineSrc sends MEDIA_DATA / cinesrc:loadedmetadata / play / timeupdate once sources are resolved and the
+  // player is actually ready — use this as the ONLY "truly ready" signal for the Watch Now button.
+  useEffect(() => {
+    if (isBackend) return;
+    const handler = (event: MessageEvent) => {
+      // Verify origin and source to ensure it comes from our detail iframe
+      const origin = event.origin || "";
+      if (!origin.includes("cinesrc.st") && !origin.includes("cinesrc.net")) return;
+      if (cinesrcIframeRef.current && event.source !== cinesrcIframeRef.current.contentWindow) return;
+      
+      const data = event.data;
+      if (!data) return;
+      const eventType = data.type || data.event || "";
+      if (
+        eventType === "MEDIA_DATA" ||
+        eventType === "play" ||
+        eventType === "timeupdate" ||
+        eventType === "cinesrc:play" ||
+        eventType === "cinesrc:timeupdate" ||
+        eventType === "cinesrc:loadedmetadata" ||
+        eventType === "cinesrc:ready" ||
+        eventType === "ready"
+      ) {
+        setIframeLoaded(true);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [isBackend]);
+
+  // Sync overlay state when the user exits native fullscreen (Escape key, etc.)
+  useEffect(() => {
+    const handler = () => {
+      if (!document.fullscreenElement) setShowFullscreen(false);
+    };
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  // Backend only: probe HLS source availability via the stream-source API
+  useEffect(() => {
+    if (!isBackend) return;
+    let isMounted = true;
+    setSourceStatus("loading");
+
+    fetchStreamSources(detail.mediaType, detail.id, season, episode)
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.sources && res.sources.length > 0) {
+          setSourceStatus("available");
+        } else {
+          setSourceStatus("unavailable");
+        }
+      })
+      .catch(() => {
+        if (isMounted) setSourceStatus("unavailable");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [detail.id, detail.mediaType, season, episode, isBackend]);
 
   const metaLine = detailMetaLine(detail);
+  const playUrl = watchHref(detail, { season, episode });
+
+  const openCinesrcFullscreen = () => {
+    // No src change — the iframe has been preloading silently; just reveal it.
+    setShowFullscreen(true);
+    cinesrcContainerRef.current?.requestFullscreen?.().catch(() => {});
+  };
+
+  const closeCinesrcFullscreen = () => {
+    setShowFullscreen(false);
+    setWatchProgress(getWatchProgress(detail.mediaType, detail.id));
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  };
 
   return (
+    <>
     <div className='modal-entrance max-h-[90vh] overflow-y-auto bg-black text-white'>
-      <section className='relative min-h-[58vh]'>
+      <section
+        className='relative min-h-[70vh] md:min-h-[75vh] select-none group'
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
         <DetailBackdropPlayer
           backdropPath={detail.backdropPath}
-          episode={episode}
-          mediaId={detail.id}
-          mediaType={detail.mediaType}
+          muted={muted}
           onMutedChange={setMuted}
           posterPath={detail.posterPath}
           ref={playerRef}
-          season={season}
-          startSeconds={startSeconds}
+          trailerKey={detail.trailerKey}
         />
-        <div className='detail-hero-content relative z-10 flex min-h-[58vh] max-w-3xl flex-col justify-end overflow-visible p-6 pt-24 md:p-10'>
+        <div className='detail-hero-content relative z-20 flex min-h-[70vh] md:min-h-[75vh] max-w-2xl flex-col justify-end p-6 pt-20 md:p-10'>
           {detail.logoPath ? (
             <Image
               src={tmdbImage(detail.logoPath, "w500")}
               alt={detail.title}
               width={420}
               height={170}
-              className='mb-5 h-auto max-h-24 md:max-h-36 w-auto max-w-[75%] object-contain object-left'
+              className='mb-3 h-auto max-h-24 md:max-h-36 w-auto max-w-[85%] object-contain object-left drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'
             />
           ) : (
-            <h2 className='mb-5 max-w-2xl text-5xl font-black tracking-tight'>
+            <h2 className='mb-3 max-w-2xl text-4xl md:text-5xl font-black tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'>
               {detail.title}
             </h2>
           )}
-          <div className='detail-action-row mt-5 flex flex-wrap items-center gap-3 overflow-visible'>
-            <button
-              className='primary-button'
-              onClick={() => void playerRef.current?.enterFullscreen()}
-              type='button'
-            >
-              <Play className='size-5 fill-current' />
-              Play
-            </button>
+
+          {/* Description area fading out after 4.5s and reappearing on hover */}
+          <div
+            className={`transition-all duration-700 ease-in-out ${isDescriptionVisible
+                ? "opacity-100 max-h-96 translate-y-0 pointer-events-auto my-2"
+                : "opacity-0 max-h-0 -translate-y-2 pointer-events-none overflow-hidden my-0"
+              }`}
+          >
+            <div className='flex flex-wrap items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md mb-2'>
+              {detail.voteAverage ? (
+                <>
+                  <span className='text-white font-bold flex items-center gap-1'>
+                    <Star className='size-3.5 fill-current' />
+                    {detail.voteAverage.toFixed(1)}
+                  </span>
+                  <span>·</span>
+                </>
+              ) : null}
+              {detail.year ? (
+                <>
+                  <span>{detail.year}</span>
+                  <span>·</span>
+                </>
+              ) : null}
+              {detail.certification && detail.certification !== "NR" ? (
+                <>
+                  <span className='px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20'>
+                    {detail.certification}
+                  </span>
+                  <span>·</span>
+                </>
+              ) : null}
+              {detail.runtime ? (
+                <span>{runtimeLabel(detail.runtime)}</span>
+              ) : null}
+            </div>
+
+            <p className='text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal max-w-xl mb-3'>
+              {detail.overview}
+            </p>
+
+            {detail.genres.length > 0 ? (
+              <div className='text-xs md:text-sm font-semibold text-white/70 tracking-wide mb-2'>
+                {detail.genres.join(" | ")}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Action buttons */}
+          <div className='detail-action-row mt-3 flex flex-wrap items-center gap-3 z-20'>
+            {isBackend ? (
+              // Backend: check HLS source availability via API, then navigate to watch page
+              sourceStatus === "loading" ? (
+                <button
+                  disabled
+                  className='flex items-center gap-3 bg-white/70 text-black/70 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl backdrop-blur-sm'
+                  type='button'
+                >
+                  <div className='w-7 h-7 rounded-full bg-black/80 flex items-center justify-center text-white shrink-0 animate-spin'>
+                    <Loader2 className='size-3.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>Checking source...</span>
+                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
+                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                    </span>
+                  </div>
+                </button>
+              ) : sourceStatus === "unavailable" ? (
+                <button
+                  disabled
+                  className='flex items-center gap-3 bg-white/20 text-white/50 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl border border-white/10'
+                  type='button'
+                >
+                  <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/40 shrink-0'>
+                    <AlertCircle className='size-3.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>Source Unavailable</span>
+                    <span className='text-[10px] font-bold text-white/40 uppercase tracking-wider mt-0.5'>
+                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                    </span>
+                  </div>
+                </button>
+              ) : (
+                <Link
+                  className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl'
+                  href={playUrl}
+                >
+                  <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
+                    <Play className='size-3.5 fill-current ml-0.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>Watch Now</span>
+                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
+                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                    </span>
+                  </div>
+                </Link>
+              )
+            ) : (
+              // CineSrc: iframe preloads silently in background; button activates on load
+              !iframeLoaded ? (
+                <button
+                  disabled
+                  className='flex items-center gap-3 bg-white/70 text-black/70 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl backdrop-blur-sm'
+                  type='button'
+                >
+                  <div className='w-7 h-7 rounded-full bg-black/80 flex items-center justify-center text-white shrink-0 animate-spin'>
+                    <Loader2 className='size-3.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>Loading player...</span>
+                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
+                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                    </span>
+                  </div>
+                </button>
+              ) : (
+                <button
+                  onClick={openCinesrcFullscreen}
+                  className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl cursor-pointer'
+                  type='button'
+                >
+                  <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
+                    <Play className='size-3.5 fill-current ml-0.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>
+                      {watchProgress ? "Continue Watching" : "Watch Now"}
+                    </span>
+                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
+                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                    </span>
+                  </div>
+                </button>
+              )
+            )}
+
+            <WatchlistPicker iconOnly item={detail} menuPosition='up' />
+
             <button
               aria-label={liked ? "Unlike" : "Like"}
-              className={`icon-button ${liked ? "icon-button-active" : "ghost-button"}`}
+              className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all ${liked
+                  ? "bg-white text-black border-white"
+                  : "bg-white/10 hover:bg-white/20 text-white border-white/20"
+                }`}
               disabled={likeBusy}
               onClick={toggleLike}
               type='button'
             >
               <ThumbsUp className={`size-5 ${liked ? "fill-current" : ""}`} />
             </button>
-            <WatchlistPicker iconOnly item={detail} />
-            {detail.trailerKey ? (
-              <a
-                aria-label='Trailer'
-                className='icon-button ghost-button'
-                href={`https://www.youtube.com/watch?v=${detail.trailerKey}`}
-                rel='noreferrer'
-                target='_blank'
-              >
-                <Film className='size-5' />
-              </a>
-            ) : null}
+          </div>
+        </div>
+
+        {/* Controls fixed at far right edge of container */}
+        <div className='absolute right-6 md:right-10 bottom-6 z-30 flex items-center gap-3'>
+          {detail.trailerKey ? (
             <button
-              aria-label={muted ? "Unmute preview" : "Mute preview"}
-              className='icon-button ghost-button ml-auto'
-              onClick={() => playerRef.current?.setMuted(!muted)}
+              aria-label={isPlayingTrailer ? "Pause trailer" : "Play trailer"}
+              className='hidden md:flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105'
+              onClick={() => {
+                playerRef.current?.togglePlay();
+                setIsPlayingTrailer((prev) => !prev);
+              }}
               type='button'
             >
-              {muted ? (
-                <VolumeX className='size-5' />
+              {isPlayingTrailer ? (
+                <Pause className='size-5 fill-current' />
               ) : (
-                <Volume2 className='size-5' />
+                <Play className='size-5 fill-current ml-0.5' />
               )}
             </button>
-          </div>
+          ) : null}
+
+          <button
+            aria-label={muted ? "Unmute preview" : "Mute preview"}
+            className='w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105'
+            onClick={() => {
+              playerRef.current?.setMuted(!muted);
+              setMuted(!muted);
+            }}
+            type='button'
+          >
+            {muted ? (
+              <VolumeX className='size-5' />
+            ) : (
+              <Volume2 className='size-5' />
+            )}
+          </button>
         </div>
       </section>
 
       <section className='modal-body-entrance space-y-9 px-6 pb-10 pt-6 md:px-10'>
-        <div>
-          <p className='max-w-4xl text-base leading-7 text-white/65 md:text-lg'>
-            {detail.overview}
-          </p>
-          {metaLine ? (
-            <p className='mt-3 text-xs text-white/40'>{metaLine}</p>
-          ) : null}
-          {detail.cast.length ? (
-            <p className='mt-2 text-xs'>
-              <span className='text-white'>cast: </span>
-              <span className='text-white/40'>
-                {detail.cast.map((member) => member.name).join(", ")}
-              </span>
-            </p>
-          ) : null}
-        </div>
 
         {detail.episodes.length ? (
           <Episodes
@@ -346,5 +616,30 @@ export function MediaDetailContent({
         ) : null}
       </section>
     </div>
+
+    {/* CineSrc: hidden preload iframe container — mounted immediately so the player loads in the background.
+        When showFullscreen=true the container expands to cover the entire viewport. */}
+    {!isBackend && (
+      <div
+        ref={cinesrcContainerRef}
+        onClick={(e) => e.stopPropagation()}
+        className={`fixed inset-0 bg-black transition-opacity duration-300 ${
+          showFullscreen
+            ? "opacity-100 z-[9999] pointer-events-auto"
+            : "opacity-0 -z-10 pointer-events-none"
+        }`}
+      >
+        <IframePlayer
+          mediaType={detail.mediaType}
+          mediaId={detail.id}
+          season={season}
+          episode={episode}
+          item={detail}
+          onReady={() => setIframeLoaded(true)}
+          onClose={closeCinesrcFullscreen}
+        />
+      </div>
+    )}
+    </>
   );
 }

@@ -3,40 +3,38 @@
 import Image from "next/image";
 import {
   forwardRef,
-  useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
 } from "react";
-import {
-  getCinesrcCurrentTime,
-  sendCinesrcCommand,
-  useCinesrcMessages,
-} from "@/lib/cinesrc-messages";
-import {
-  cinesrcPreviewUrl,
-  cinesrcUrl,
-  tmdbImage,
-  type MediaType,
-} from "@/lib/media";
+import { tmdbImage } from "@/lib/media";
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (
+        element: HTMLElement | string,
+        config: Record<string, unknown>,
+      ) => unknown;
+      PlayerState?: {
+        ENDED: number;
+      };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
 
 export type DetailBackdropPlayerHandle = {
-  enterFullscreen: () => Promise<void>;
   setMuted: (muted: boolean) => void;
-  isPlaying: () => boolean;
+  togglePlay: () => void;
 };
 
 type DetailBackdropPlayerProps = {
-  mediaType: MediaType;
-  mediaId: number;
-  season: number;
-  episode: number;
   backdropPath: string | null;
   posterPath: string | null;
-  startSeconds?: number;
-  onPlayingChange?: (playing: boolean) => void;
+  trailerKey?: string | null;
+  muted?: boolean;
   onMutedChange?: (muted: boolean) => void;
 };
 
@@ -44,155 +42,133 @@ export const DetailBackdropPlayer = forwardRef<
   DetailBackdropPlayerHandle,
   DetailBackdropPlayerProps
 >(function DetailBackdropPlayer(
-  {
-    mediaType,
-    mediaId,
-    season,
-    episode,
-    backdropPath,
-    posterPath,
-    startSeconds,
-    onPlayingChange,
-    onMutedChange,
-  },
+  { backdropPath, posterPath, trailerKey, muted = true, onMutedChange },
   ref,
 ) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const progressRef = useRef(startSeconds ?? 0);
-  const [showVideo, setShowVideo] = useState(false);
-  const [muted, setMutedState] = useState(true);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
-
-  const previewSrc = useMemo(
-    () =>
-      cinesrcPreviewUrl(
-        mediaType,
-        mediaId,
-        season,
-        episode,
-        startSeconds,
-      ),
-    [episode, mediaId, mediaType, season, startSeconds],
-  );
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
 
   useEffect(() => {
-    setIframeSrc(previewSrc);
-    setShowVideo(false);
-    setFullscreen(false);
-    setMutedState(true);
-    progressRef.current = startSeconds ?? 0;
-  }, [previewSrc, startSeconds]);
+    setVideoLoaded(false);
+    setIsPlaying(true);
+    if (!trailerKey) return;
+    const timer = setTimeout(() => {
+      setVideoLoaded(true);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [trailerKey]);
 
-  const handlers = useMemo(
-    () => ({
-      onPlay: () => {
-        setShowVideo(true);
-        onPlayingChange?.(true);
-      },
-      onTimeUpdate: (currentTime: number) => {
-        progressRef.current = Math.max(progressRef.current, currentTime);
-      },
-      onVolumeChange: (_volume: number, isMuted: boolean) => {
-        setMutedState(isMuted);
-        onMutedChange?.(isMuted);
-      },
-    }),
-    [onMutedChange, onPlayingChange],
-  );
+  useEffect(() => {
+    if (!trailerKey || typeof window === "undefined") return;
 
-  useCinesrcMessages(iframeRef, handlers, Boolean(iframeSrc));
-
-  const setMuted = useCallback(
-    (nextMuted: boolean) => {
-      setMutedState(nextMuted);
-      sendCinesrcCommand(iframeRef.current, "setMuted", [nextMuted]);
-      onMutedChange?.(nextMuted);
-    },
-    [onMutedChange],
-  );
-
-  const enterFullscreen = useCallback(async () => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const currentTime = await getCinesrcCurrentTime(iframeRef.current);
-    const resumeAt = Math.max(currentTime, progressRef.current);
-
-    const fullSrc = cinesrcUrl(
-      mediaType,
-      mediaId,
-      season,
-      episode,
-      resumeAt >= 30 ? resumeAt : undefined,
-    );
-
-    setIframeSrc(fullSrc);
-    setFullscreen(true);
-    setShowVideo(true);
-
-    if (container.requestFullscreen) {
-      await container.requestFullscreen();
-    } else if (
-      "webkitRequestFullscreen" in container &&
-      typeof (container as HTMLElement & { webkitRequestFullscreen: () => void })
-        .webkitRequestFullscreen === "function"
-    ) {
-      (
-        container as HTMLElement & { webkitRequestFullscreen: () => void }
-      ).webkitRequestFullscreen();
+    if (!window.YT) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube-nocookie.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName("script")[0];
+      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
     }
 
-    window.setTimeout(() => {
-      sendCinesrcCommand(iframeRef.current, "setMuted", [false]);
-      sendCinesrcCommand(iframeRef.current, "play");
-      setMutedState(false);
-      onMutedChange?.(false);
-    }, 800);
-  }, [episode, mediaId, mediaType, onMutedChange, season]);
+    let playerInstance: unknown = null;
+    const iframeId = `detail-yt-player-${trailerKey}`;
+
+    const initPlayer = () => {
+      if (!window.YT?.Player) return;
+      try {
+        playerInstance = new window.YT.Player(iframeId, {
+          events: {
+            onReady: () => {
+              setVideoLoaded(true);
+            },
+            onStateChange: (event: { data: number }) => {
+              if (event.data === 1) {
+                setVideoLoaded(true);
+              }
+            },
+          },
+        });
+      } catch {
+        // Player init fallback
+      }
+    };
+
+    if (window.YT?.Player) {
+      setTimeout(initPlayer, 100);
+    } else {
+      window.onYouTubeIframeAPIReady = () => setTimeout(initPlayer, 100);
+    }
+
+    return () => {
+      if (
+        playerInstance &&
+        typeof (playerInstance as { destroy?: () => void }).destroy ===
+          "function"
+      ) {
+        (playerInstance as { destroy: () => void }).destroy();
+      }
+    };
+  }, [trailerKey]);
 
   useImperativeHandle(
     ref,
     () => ({
-      enterFullscreen,
-      setMuted,
-      isPlaying: () => showVideo,
+      setMuted: (nextMuted: boolean) => {
+        if (!iframeRef.current) return;
+        const func = nextMuted ? "mute" : "unMute";
+        iframeRef.current.contentWindow?.postMessage(
+          JSON.stringify({ event: "command", func, args: "" }),
+          "*",
+        );
+        onMutedChange?.(nextMuted);
+      },
+      togglePlay: () => {
+        if (!iframeRef.current) return;
+        const func = isPlaying ? "pauseVideo" : "playVideo";
+        iframeRef.current.contentWindow?.postMessage(
+          JSON.stringify({ event: "command", func, args: "" }),
+          "*",
+        );
+        setIsPlaying((prev) => !prev);
+      },
     }),
-    [enterFullscreen, setMuted, showVideo],
+    [isPlaying, onMutedChange],
   );
 
   const imageSrc = tmdbImage(backdropPath || posterPath, "original");
 
   return (
-    <div
-      className={`absolute inset-0 overflow-hidden ${fullscreen ? "detail-backdrop-fullscreen bg-black" : ""}`}
-      ref={containerRef}
-    >
+    <div className='absolute inset-0 overflow-hidden bg-black select-none pointer-events-none'>
       {imageSrc ? (
         <Image
           alt=''
-          className={`object-cover transition-opacity duration-700 ${showVideo ? "opacity-0" : "opacity-100"}`}
+          className={`object-cover object-top transition-opacity duration-700 ${
+            videoLoaded ? "opacity-0" : "opacity-80"
+          }`}
           fill
           priority
           sizes='100vw'
           src={imageSrc}
         />
       ) : null}
-      {iframeSrc ? (
+
+      {trailerKey ? (
         <iframe
-          allow='autoplay; fullscreen; picture-in-picture'
-          allowFullScreen
-          className={`absolute inset-0 h-full w-full border-0 transition-opacity duration-700 ${showVideo ? "opacity-100" : "opacity-0"} ${fullscreen ? "pointer-events-auto" : "pointer-events-none"}`}
+          id={`detail-yt-player-${trailerKey}`}
           ref={iframeRef}
-          referrerPolicy='no-referrer'
-          sandbox='allow-scripts allow-same-origin allow-presentation'
-          src={iframeSrc}
-          title='Preview player'
+          onLoad={() => setVideoLoaded(true)}
+          src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1`}
+          className={`w-[170%] h-[170%] absolute top-0 left-1/2 -translate-x-1/2 object-cover pointer-events-none scale-125 min-w-full min-h-full transition-opacity duration-700 ${
+            videoLoaded ? "opacity-100" : "opacity-0"
+          }`}
+          allow='autoplay; encrypted-media'
+          title='Backdrop Trailer'
         />
       ) : null}
-      <div className='absolute inset-0 bg-linear-to-t from-black via-black/30 to-black/10' />
-      <div className='absolute inset-0 bg-linear-to-r from-black/75 via-transparent to-transparent' />
+
+      <div className='absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent z-10' />
+      <div className='absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10' />
     </div>
   );
 });
+
+

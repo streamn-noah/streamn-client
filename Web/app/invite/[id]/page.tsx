@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { Check, Loader2, X } from "lucide-react";
+import { BookMarked, Check, Loader2, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
+import { StreamnNav } from "@/components/streamn/streamn-nav";
 import { tmdbImage } from "@/lib/media";
 
 type InvitePayload = {
@@ -63,19 +64,29 @@ export default function InvitePage() {
 
   if (authLoading || loading) {
     return (
-      <main className='auth-page-shell flex items-center justify-center'>
-        <Loader2 className='size-8 animate-spin text-white/50' />
+      <main className="bg-black min-h-screen text-white flex items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-white/50" />
       </main>
     );
   }
 
   if (!invite) {
     return (
-      <main className='auth-page-shell flex items-center justify-center px-6'>
-        <div className='auth-card text-center'>
-          <X className='mx-auto size-10 text-red-400' />
-          <h1 className='auth-headline mt-4'>Invite expired</h1>
-          <p className='auth-subtext'>This link is no longer valid.</p>
+      <main className="bg-black min-h-screen text-white flex items-center justify-center p-4 pl-0 md:pl-[72px]">
+        <StreamnNav />
+        <div className="w-full max-w-md rounded-2xl bg-black border border-white/20 p-8 shadow-2xl text-center space-y-4">
+          <div className="size-12 rounded-full bg-white/10 flex items-center justify-center mx-auto text-white">
+            <X className="size-6" />
+          </div>
+          <h1 className="text-2xl font-black tracking-tight text-white">Invite Expired</h1>
+          <p className="text-sm text-white/60">This watchlist invite link is no longer valid or has expired.</p>
+          <button
+            onClick={() => router.push("/discover")}
+            className="w-full py-3 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-all mt-4"
+            type="button"
+          >
+            Go to Discover
+          </button>
         </div>
       </main>
     );
@@ -85,55 +96,71 @@ export default function InvitePage() {
   const items = list.watchlist_items ?? [];
 
   return (
-    <main className='auth-page-shell'>
-      <div className='morph-bg' />
-      <div className='grain' />
-      <div className='auth-card reveal max-w-lg'>
-        <h1 className='auth-headline'>Watchlist invite</h1>
-        <p className='auth-subtext'>
-          {accepted
-            ? "Watchlist saved to your library!"
-            : `You've been invited to save "${list.name}".`}
-        </p>
+    <main className="bg-black min-h-screen text-white flex items-center justify-center p-4 sm:p-6 pl-0 md:pl-[72px] transition-all duration-300">
+      <StreamnNav />
 
-        {list.description ? (
-          <p className='mb-4 text-sm text-white/55'>{list.description}</p>
-        ) : null}
-
-        <div className='library-grid mb-6'>
-          {items.slice(0, 6).map((item) => (
-            <div className='library-media-card' key={item.id}>
-              <Image
-                src={tmdbImage(item.poster_path, "w342")}
-                alt={item.title}
-                fill
-                sizes='100px'
-                className='object-cover'
-              />
-            </div>
-          ))}
+      <div className="w-full max-w-lg rounded-2xl bg-black border border-white/20 p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+          <div className="size-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+            <BookMarked className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">Watchlist Invite</h1>
+            <p className="text-xs text-white/50">Shared with you on Streamn</p>
+          </div>
         </div>
 
+        <div>
+          <p className="text-sm sm:text-base text-white/80 font-medium leading-relaxed">
+            {accepted
+              ? "Watchlist saved to your library!"
+              : `You've been invited to save "${list.name}".`}
+          </p>
+
+          {list.description ? (
+            <p className="mt-2 text-xs sm:text-sm text-white/50 leading-relaxed">{list.description}</p>
+          ) : null}
+        </div>
+
+        {items.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {items.slice(0, 6).map((item) => (
+              <div
+                className="relative aspect-[1/1.4] w-full overflow-hidden rounded-xl bg-zinc-900 border border-white/10 shadow-md"
+                key={item.id}
+              >
+                <Image
+                  src={tmdbImage(item.poster_path, "w342")}
+                  alt={item.title}
+                  fill
+                  sizes="150px"
+                  className="object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
         {accepted ? (
-          <div className='flex items-center justify-center gap-2 text-green-400'>
-            <Check className='size-5' />
-            Redirecting to Library...
+          <div className="flex items-center justify-center gap-2 text-sm font-semibold text-white bg-white/10 border border-white/20 py-3 rounded-full animate-pulse">
+            <Check className="size-4 text-green-400" />
+            <span>Redirecting to Library...</span>
           </div>
         ) : (
-          <div className='flex flex-wrap gap-3'>
+          <div className="flex gap-3 pt-2">
             <button
-              className='auth-cta-button flex-1'
+              className="flex-1 py-3 px-6 rounded-full bg-white hover:bg-white/90 text-black font-bold text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
               disabled={busy}
               onClick={() => respond("accept")}
-              type='button'
+              type="button"
             >
-              {busy ? <Loader2 className='size-5 animate-spin' /> : "Accept"}
+              {busy ? <Loader2 className="size-4 animate-spin text-black" /> : "Accept Invite"}
             </button>
             <button
-              className='ghost-button flex-1'
+              className="flex-1 py-3 px-6 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
               disabled={busy}
               onClick={() => respond("decline")}
-              type='button'
+              type="button"
             >
               Decline
             </button>

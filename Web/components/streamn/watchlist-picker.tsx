@@ -18,10 +18,12 @@ export function WatchlistPicker({
   item,
   onAdded,
   iconOnly = false,
+  menuPosition = "down",
 }: {
   item: MediaSummary;
   onAdded?: () => void;
   iconOnly?: boolean;
+  menuPosition?: "down" | "up";
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -96,7 +98,11 @@ export function WatchlistPicker({
       </button>
 
       {open ? (
-        <div className='watchlist-picker-menu'>
+        <div
+          className={`watchlist-picker-menu ${
+            menuPosition === "up" ? "watchlist-picker-menu-up" : ""
+          }`}
+        >
           <p className='mb-2 text-xs font-bold uppercase tracking-wider text-white/40'>
             Add to watchlist
           </p>
@@ -134,3 +140,4 @@ export function WatchlistPicker({
     </div>
   );
 }
+

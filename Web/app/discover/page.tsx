@@ -1,11 +1,11 @@
 import { DiscoverApp } from "@/components/streamn/discover-app";
 import {
   enrichWithLogos,
+  fetchWatchProvidersFromTmdb,
   getGenreList,
   getLatest,
   getTopRated,
   getTrending,
-  watchProviders,
 } from "@/lib/tmdb";
 
 export default async function DiscoverPage() {
@@ -21,24 +21,26 @@ export default async function DiscoverPage() {
     topRatedTv,
     movieGenres,
     tvGenres,
+    providersList,
   ] = await Promise.all([
-    getTrending("all", "week"),
-    getTrending("movie", "week"),
-    getTrending("tv", "week"),
-    getTrending("movie", "day"),
-    getTrending("tv", "day"),
-    getLatest("movie"),
-    getLatest("tv"),
-    getTopRated("movie"),
-    getTopRated("tv"),
-    getGenreList("movie"),
-    getGenreList("tv"),
+    getTrending("all", "week").catch(() => []),
+    getTrending("movie", "week").catch(() => []),
+    getTrending("tv", "week").catch(() => []),
+    getTrending("movie", "day").catch(() => []),
+    getTrending("tv", "day").catch(() => []),
+    getLatest("movie").catch(() => []),
+    getLatest("tv").catch(() => []),
+    getTopRated("movie").catch(() => []),
+    getTopRated("tv").catch(() => []),
+    getGenreList("movie").catch(() => [] as { id: number; name: string }[]),
+    getGenreList("tv").catch(() => [] as { id: number; name: string }[]),
+    fetchWatchProvidersFromTmdb().catch(() => []),
   ]);
 
   const bannerSource = trendingWeek
     .filter((item) => item.backdropPath)
-    .slice(0, 5);
-  const bannerItems = await enrichWithLogos(bannerSource);
+    .slice(0, 8);
+  const bannerItems = await enrichWithLogos(bannerSource).catch(() => []);
 
   return (
     <DiscoverApp
@@ -53,12 +55,13 @@ export default async function DiscoverPage() {
         latestTv,
         topRatedMovies,
         topRatedTv,
-        providers: watchProviders.map((provider) => ({
+        providers: providersList.map((provider) => ({
           name: provider.name,
           slug: provider.slug,
+          logoPath: provider.logoPath,
         })),
-        movieGenres,
-        tvGenres,
+        movieGenres: movieGenres ?? [],
+        tvGenres: tvGenres ?? [],
       }}
     />
   );

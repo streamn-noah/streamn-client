@@ -1,4 +1,3 @@
-import { WatchHeader } from "@/components/streamn/watch-header";
 import { WatchPlayer } from "@/components/streamn/watch-player";
 import { type MediaSummary, type MediaType } from "@/lib/media";
 import { getMediaDetail } from "@/lib/tmdb";
@@ -10,11 +9,14 @@ export default async function WatchPage({
   params: Promise<{ type: MediaType; id: string }>;
   searchParams: Promise<{ s?: string; e?: string }>;
 }) {
-  const { type, id } = await params;
-  const { s, e } = await searchParams;
+  const resolvedParams = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
+
+  const type = resolvedParams.type;
+  const id = resolvedParams.id;
   const numericId = Number(id);
-  const season = Number(s ?? 1);
-  const episode = Number(e ?? 1);
+  const season = Number(resolvedSearchParams.s ?? 1);
+  const episode = Number(resolvedSearchParams.e ?? 1);
 
   const validType = type === "movie" || type === "tv";
   let detail = null;
@@ -27,43 +29,49 @@ export default async function WatchPage({
     }
   }
 
-  const item: MediaSummary =
-    detail ??
-    ({
-      id: numericId,
-      mediaType: type,
-      title: "Untitled",
-      subtitle: type === "movie" ? "Movie" : "Series",
-      overview: "",
-      posterPath: null,
-      backdropPath: null,
-      voteAverage: 0,
-      year: "",
-      genreIds: [],
-    } satisfies MediaSummary);
+  const item: MediaSummary = detail
+    ? {
+        id: detail.id,
+        mediaType: detail.mediaType,
+        title: detail.title,
+        subtitle: detail.subtitle,
+        overview: detail.overview,
+        posterPath: detail.posterPath,
+        backdropPath: detail.backdropPath,
+        voteAverage: detail.voteAverage,
+        year: detail.year,
+        genreIds: detail.genreIds,
+        logoPath: detail.logoPath,
+        trailerKey: detail.trailerKey,
+      }
+    : {
+        id: numericId,
+        mediaType: type,
+        title: "Untitled",
+        subtitle: type === "movie" ? "Movie" : "Series",
+        overview: "",
+        posterPath: null,
+        backdropPath: null,
+        voteAverage: 0,
+        year: "",
+        genreIds: [],
+      };
 
   return (
-    <main className='min-h-screen bg-black text-white'>
-      <div className='flex h-screen flex-col'>
-        <WatchHeader
+    <main className="h-screen w-screen bg-black text-white overflow-hidden">
+      {validType && Number.isFinite(numericId) ? (
+        <WatchPlayer
+          episode={episode}
+          item={item}
           mediaId={numericId}
           mediaType={type}
-          title={detail?.title}
+          season={season}
         />
-        {validType && Number.isFinite(numericId) ? (
-          <WatchPlayer
-            episode={episode}
-            item={item}
-            mediaId={numericId}
-            mediaType={type}
-            season={season}
-          />
-        ) : (
-          <div className='grid flex-1 place-items-center text-white/60'>
-            This watch link is invalid.
-          </div>
-        )}
-      </div>
+      ) : (
+        <div className="grid h-screen place-items-center text-white/60">
+          This watch link is invalid.
+        </div>
+      )}
     </main>
   );
 }

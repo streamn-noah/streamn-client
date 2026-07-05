@@ -1,0 +1,222 @@
+{
+    "responseId": "032db99d-a42e-4c05-8e9f-9ccead026a41",
+    "expiresAt": "2026-07-04T03:14:41.653Z",
+    "sources": [
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fstreams.icefy.top%2F5c3a0cbeb636637043f115f4566f1b28%2Fmaster.m3u8%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fstreams.icefy.top%22%2C%22Origin%22%3A%22https%3A%2F%2Fstreams.icefy.top%22%7D%7D",
+            "quality": "1080",
+            "type": "hls",
+            "audioTracks": [
+                {
+                    "label": "English",
+                    "language": "eng"
+                }
+            ],
+            "provider": {
+                "name": "Icefy",
+                "id": "Icefy"
+            }
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fnextlevelbrandstudio.site%2FAIQnpSU7C%2Fpl%2FH4sIAAAAAAAAAw3O63ZDMAAA4FdKpBzZT0VVXSZyq38q2VLCrJxqPf32PcEHvC8Xa4xvAIIDdhD2fA213_rIczvfUR91jX.4.H41kv8K2T2yPZ5v97WgjEjSB2UHzVbJ89aG8alC.d4ilZSMLzRR1wzwp4ggyadmzWC.saHoG0Ag53PfyPiToDTUtFnqnrACkEIPluhEBRSRhYY8YjDI6WjmWqqdMVN2UzO21pRiTI0Wq0cG_0nfa5o76tSxl6SW9AVwxW1Y0wvKncoODz7CpKPRQYVBcIUm4oOJtJyhkI3XCnUiMK5ZH1yEcBduY9RGKcmA5fXAj__TjSaBpXt6VyO.0qk4EkFMHfKpQ_ZdUYD_ABGLHxZBAQAA%2Fmaster.m3u8%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(X11%3B%20Ubuntu%3B%20Linux%20x86_64%3B%20rv%3A90.0)%20Gecko%2F90.0%20Firefox%2F90.0%22%2C%22Referer%22%3A%22https%3A%2F%2Fbrightpathsignals.com%2F%22%2C%22Origin%22%3A%22https%3A%2F%2Fbrightpathsignals.com%22%2C%22Accept%22%3A%22*%2F*%22%7D%7D",
+            "type": "hls",
+            "quality": "1080p",
+            "audioTracks": [
+                {
+                    "label": "Original",
+                    "language": "Original"
+                }
+            ],
+            "provider": {
+                "id": "vidapi",
+                "name": "VidApi"
+            }
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fnextlevelbrandstudio.site%2FAIQnpSU7C%2Fpl%2FH4sIAAAAAAAAAwXB3XaCIAAA4FcChJa7bKGNAhMQkjsFznGp_ezUmfL0.z6fE0wCwhGRGHCGNx85Dj1BaEtATiD5dJlRHAYpgU89xSjOA.tLBmtE174M9wDo3wk41E7iZW2x.BSe9WQ2IRU7VbqDRnJSiOFTcl9mFKujC3Q3nvHxOx0hqww1T_2T63hhG9NArPZF2drXvbVwVuNyjlQuwfqsGQsr7B3EPc.qg3A.K3R3Zau0RRavk63RsteHYCTcXTtqlL0Ukjfk2MLHWcyC.plZrn1Wj.LdXBwX8.B0YlJR.VKNY501Dw450KVk9haAMOy3s1Mrip2s6PBWjaw8GnAD_aqSK6PaApdA_g8wXZpSQQEAAA--%2Fmaster.m3u8%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(X11%3B%20Ubuntu%3B%20Linux%20x86_64%3B%20rv%3A90.0)%20Gecko%2F90.0%20Firefox%2F90.0%22%2C%22Referer%22%3A%22https%3A%2F%2Fbrightpathsignals.com%2F%22%2C%22Origin%22%3A%22https%3A%2F%2Fbrightpathsignals.com%22%2C%22Accept%22%3A%22*%2F*%22%7D%7D",
+            "type": "hls",
+            "quality": "1080p",
+            "audioTracks": [
+                {
+                    "label": "Original",
+                    "language": "Original"
+                }
+            ],
+            "provider": {
+                "id": "vidapi",
+                "name": "VidApi"
+            }
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fnextlevelbrandstudio.site%2FAIQnpSU7C%2Fpl%2FH4sIAAAAAAAAAwXB3ZKCIBgA0FcC0cq9rNC0wEXhs7wD6R92nHZH1KffcwzaJDperywxm5RE5qavaHPrb2ZNIru25EuSehZtjOFQokaVT0AcVXQ69WSbiR.3M.i.dGoKgIfKuiJp1Xs2ePvpnQgAdqVedahpjBWqv6_n8ilcsWiagHEsYXn67jM61ru0kQR.mf8bBXaj3APv8.lRKccvUTk0CMBQIPxlWe3dotth7CE7iTc.29zFnXd7wOVB.alraDzrfAjShwTOMKoXP0DGlc44qeDhL54GrXAnd.mi0PTpUcqBJo1EYT5Gj_kq7xHDNlaejiwviwrKQnpeHEk3CcmRji4RU3ar8D3YBaX_15VnzEEBAAA-%2Fmaster.m3u8%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(X11%3B%20Ubuntu%3B%20Linux%20x86_64%3B%20rv%3A90.0)%20Gecko%2F90.0%20Firefox%2F90.0%22%2C%22Referer%22%3A%22https%3A%2F%2Fbrightpathsignals.com%2F%22%2C%22Origin%22%3A%22https%3A%2F%2Fbrightpathsignals.com%22%2C%22Accept%22%3A%22*%2F*%22%7D%7D",
+            "type": "hls",
+            "quality": "1080p",
+            "audioTracks": [
+                {
+                    "label": "Original",
+                    "language": "Original"
+                }
+            ],
+            "provider": {
+                "id": "vidapi",
+                "name": "VidApi"
+            }
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fnextlevelbrandstudio.site%2FAIQnpSU7C%2Fplaylist%2FGvMJX68duoBibGX_DqC9gOX3OcRJ53L9KO3XIcKh8-cyRwbCp2JnVKjsesclUS63NGcXAhtTV2xycQSClaNhPaXfn6i2TQAaFsPmyMDYF0o8diV0ZQ%2Flist.m3u8%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(X11%3B%20Ubuntu%3B%20Linux%20x86_64%3B%20rv%3A90.0)%20Gecko%2F90.0%20Firefox%2F90.0%22%2C%22Referer%22%3A%22https%3A%2F%2Fbrightpathsignals.com%2F%22%2C%22Origin%22%3A%22https%3A%2F%2Fbrightpathsignals.com%22%2C%22Accept%22%3A%22*%2F*%22%7D%7D",
+            "type": "hls",
+            "quality": "1080p",
+            "audioTracks": [
+                {
+                    "label": "Original",
+                    "language": "Original"
+                }
+            ],
+            "provider": {
+                "id": "vidapi",
+                "name": "VidApi"
+            }
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fhellstorm.lol%2Fplaylist%2F476bb20a498cf81578fbe44e%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "quality": "1080",
+            "type": "hls",
+            "audioTracks": [
+                {
+                    "language": "eng",
+                    "label": "English"
+                }
+            ],
+            "provider": {
+                "id": "vidrock",
+                "name": "VidRock"
+            }
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fshy-smoke-85df.xxw8bjzldt.workers.dev%2Ffile2%2FOGM1YmQyNWQxOGYyZmJhN2Q2NGJkNTc4YzJiNjUxOTkxNzgzMDEzNzk1ODQ3NTM3%2Fmaster.m3u8%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "quality": "1080",
+            "type": "hls",
+            "audioTracks": [
+                {
+                    "language": "eng",
+                    "label": "English"
+                }
+            ],
+            "provider": {
+                "id": "vidrock",
+                "name": "VidRock"
+            }
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fvixsrc.to%2Fplaylist%2F699691%3Ftoken%3D0573b14c05180330aa5302cedef20f30%26expires%3D1788311671%26h%3D1%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fvixsrc.to%2Fapi%2Ftv%2F124364%2F4%2F1%22%2C%22Origin%22%3A%22https%3A%2F%2Fvixsrc.to%22%7D%7D",
+            "type": "hls",
+            "quality": "1080p",
+            "audioTracks": [
+                {
+                    "language": "ita",
+                    "label": "Italian"
+                },
+                {
+                    "language": "eng",
+                    "label": "English"
+                }
+            ],
+            "provider": {
+                "id": "vixsrc",
+                "name": "VixSrc"
+            }
+        }
+    ],
+    "subtitles": [
+        {
+            "url": "https://vidapi.cloud/subs/f1685e3b1639b03aec4df59c5426f2ba/English-SDH.eng.srt",
+            "label": "English-SDH",
+            "format": "srt"
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fcache.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%2FArabic.vtt%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fsub.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "format": "vtt",
+            "label": "Arabic"
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fcache.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%2FBengali.vtt%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fsub.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "format": "vtt",
+            "label": "Bengali"
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fcache.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%2FEnglish.vtt%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fsub.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "format": "vtt",
+            "label": "English"
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fcache.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%2FFilipino.vtt%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fsub.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "format": "vtt",
+            "label": "Filipino"
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fcache.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%2FFrench.vtt%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fsub.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "format": "vtt",
+            "label": "French"
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fcache.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%2FIndonesian.vtt%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fsub.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "format": "vtt",
+            "label": "Indonesian"
+        },
+        {
+            "url": "https://streamn-backend.fly.dev/v1/proxy?data=%7B%22url%22%3A%22https%3A%2F%2Fcache.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%2FMalay.vtt%22%2C%22headers%22%3A%7B%22User-Agent%22%3A%22Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F150%20Safari%2F537.36%22%2C%22Accept%22%3A%22application%2Fjson%2C%20text%2Fjavascript%2C%20*%2F*%3B%20q%3D0.01%22%2C%22Accept-Language%22%3A%22en-US%2Cen%3Bq%3D0.9%22%2C%22Referer%22%3A%22https%3A%2F%2Fsub.vdrk.site%2Fv2%2Ftv%2F124364%2F4%2F1%22%2C%22Origin%22%3A%22https%3A%2F%2Fvidrock.net%2F%22%7D%7D",
+            "format": "vtt",
+            "label": "Malay"
+        }
+    ],
+    "diagnostics": [
+        {
+            "code": "PROVIDER_ERROR",
+            "message": "CineSu: Stream URL is not accessible",
+            "field": "",
+            "severity": "error"
+        },
+        {
+            "code": "PROVIDER_ERROR",
+            "message": "Peachify: all peachify servers returned no sources",
+            "field": "",
+            "severity": "error"
+        },
+        {
+            "code": "PROVIDER_ERROR",
+            "message": "MafiaEmbed: Failed to retrieve session cookie",
+            "field": "",
+            "severity": "error"
+        },
+        {
+            "code": "PROVIDER_ERROR",
+            "message": "Videasy: all videasy servers returned no sources",
+            "field": "",
+            "severity": "error"
+        },
+        {
+            "code": "PROVIDER_ERROR",
+            "message": "Provider 'VidNest' failed: Cannot read properties of undefined (reading 'map')",
+            "field": "",
+            "severity": "error"
+        },
+        {
+            "code": "PROVIDER_ERROR",
+            "message": "VidSrc: Failed to extract m3u8 URLs. Note that VidSrc blocks all kinds of VPN IPs, so if you are using one, try disabling it and see if that helps.",
+            "field": "",
+            "severity": "error"
+        },
+        {
+            "code": "PROVIDER_ERROR",
+            "message": "VidZee: Failed to fetch decryption key",
+            "field": "",
+            "severity": "error"
+        },
+        {
+            "code": "PARTIAL_SCRAPE",
+            "message": "Only 4 of 13 providers returned results",
+            "field": "",
+            "severity": "warning"
+        }
+    ]
+}

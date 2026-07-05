@@ -127,6 +127,7 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
 
   const response = await fetch(url, {
     headers: bearer ? { Authorization: `Bearer ${bearer}` } : undefined,
+    next: { revalidate: 3600 },
   });
 
   if (!response.ok) {
@@ -147,6 +148,10 @@ function normalizeMedia(item: TmdbMedia, forcedType?: MediaType): MediaSummary |
   const title = mediaType === "movie" ? item.title ?? item.original_title : item.name ?? item.original_name;
 
   if (!title) return null;
+
+  // Filter out unreleased titles with release dates in the future
+  const today = new Date().toISOString().slice(0, 10);
+  if (date && date > today) return null;
 
   return {
     id: item.id,
@@ -257,11 +262,14 @@ export async function getTrending(
 export async function getLatest(mediaType: MediaType, page = 1) {
   const endpoint = mediaType === "movie" ? "/discover/movie" : "/discover/tv";
   const sortBy = mediaType === "movie" ? "primary_release_date.desc" : "first_air_date.desc";
+  const today = new Date().toISOString().slice(0, 10);
+  const dateKey = mediaType === "movie" ? "primary_release_date.lte" : "first_air_date.lte";
 
   const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(endpoint, {
     include_adult: false,
     page,
     sort_by: sortBy,
+    [dateKey]: today,
     "vote_count.gte": 20,
   });
 
@@ -282,13 +290,41 @@ export async function getTopRated(mediaType: MediaType, page = 1) {
   );
 }
 
-export const watchProviders = [
-  { id: 8, name: "Netflix", slug: "netflix" },
-  { id: 9, name: "Amazon Prime", slug: "prime" },
-  { id: 337, name: "Disney+", slug: "disney" },
-  { id: 1899, name: "Max", slug: "max" },
-  { id: 15, name: "Hulu", slug: "hulu" },
-] as const;
+export type WatchProviderInfo = {
+  id: number;
+  name: string;
+  slug: string;
+  logoPath: string;
+};
+
+export const watchProviders: WatchProviderInfo[] = [
+  { id: 122, name: "Hotstar Specials", slug: "hotstar", logoPath: "/7qk6F39d89Y8h022j0eL53.png" },
+  { id: 337, name: "Disney+", slug: "disney", logoPath: "/97yvRBwVzz72xBxqGj27p8L1e.png" },
+  { id: 1899, name: "Max", slug: "max", logoPath: "/h4b5w7m915.png" },
+  { id: 386, name: "Peacock", slug: "peacock", logoPath: "/drPlVsYrL1fWq68k60d.png" },
+  { id: 8, name: "Netflix", slug: "netflix", logoPath: "/pbpMk2JmcoNnQwx5JGpXngfoWbd.png" },
+  { id: 9, name: "Amazon Prime", slug: "prime", logoPath: "/g11oi9S8vU7lyV0B4Nn0mCg1L5e.png" },
+  { id: 15, name: "Hulu", slug: "hulu", logoPath: "/z2686YdStH5Zq9x2a4rK1e8p2X.png" },
+];
+
+export async function fetchWatchProvidersFromTmdb() {
+  try {
+    const data = await tmdbFetch<{
+      results?: { provider_id: number; provider_name: string; logo_path: string }[];
+    }>("/watch/providers/movie", { watch_region: "US" });
+
+    if (!data.results) return watchProviders;
+
+    const map = new Map(data.results.map((p) => [p.provider_id, p.logo_path]));
+
+    return watchProviders.map((p) => ({
+      ...p,
+      logoPath: map.get(p.id) ?? p.logoPath,
+    }));
+  } catch {
+    return watchProviders;
+  }
+}
 
 export async function getByProvider(
   mediaType: MediaType,
@@ -362,15 +398,39 @@ async function fetchLogoPath(type: MediaType, id: number) {
   }
 }
 
-export async function enrichWithLogos(items: MediaSummary[]) {
-  const logos = await Promise.all(
-    items.map((item) => fetchLogoPath(item.mediaType, item.id)),
-  );
+async function fetchTrailerKey(type: MediaType, id: number) {
+  try {
+    const data = await tmdbFetch<{
+      results?: { key: string; site: string; type: string; official?: boolean }[];
+    }>(`/${type}/${id}/videos`);
 
-  return items.map((item, index) => ({
-    ...item,
-    logoPath: logos[index] ?? null,
-  }));
+    const videos = data.results ?? [];
+    return (
+      videos.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official)?.key ??
+      videos.find((v) => v.site === "YouTube" && v.type === "Trailer")?.key ??
+      videos.find((v) => v.site === "YouTube")?.key ??
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function enrichWithLogos(items: MediaSummary[]) {
+  const enriched = await Promise.all(
+    items.map(async (item) => {
+      const [logoPath, trailerKey] = await Promise.all([
+        fetchLogoPath(item.mediaType, item.id),
+        fetchTrailerKey(item.mediaType, item.id),
+      ]);
+      return {
+        ...item,
+        logoPath: logoPath ?? item.logoPath ?? null,
+        trailerKey: trailerKey ?? item.trailerKey ?? null,
+      };
+    }),
+  );
+  return enriched;
 }
 
 function pickCertification(detail: TmdbDetail, type: MediaType) {

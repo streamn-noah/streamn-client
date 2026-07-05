@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import { AuthProvider } from "@/components/providers/auth-provider";
+import { ServiceWorkerRegister } from "@/components/providers/sw-register";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,6 +39,24 @@ const satoshi = localFont({
 export const metadata: Metadata = {
   title: "Streamn",
   description: "Find and stream movies or shows with TMDB, Gemini, and CineSrc.",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/shining-fill.svg", type: "image/svg+xml" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: ["/shining-fill.svg"],
+    apple: ["/shining-fill.svg"],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Streamn",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
 };
 
 export default function RootLayout({
@@ -50,8 +69,11 @@ export default function RootLayout({
       lang="en"
       className={`${satoshi.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-black">
-        <AuthProvider>{children}</AuthProvider>
+      <body className="min-h-full flex flex-col bg-black" suppressHydrationWarning>
+        <AuthProvider>
+          {children}
+          <ServiceWorkerRegister />
+        </AuthProvider>
       </body>
     </html>
   );
