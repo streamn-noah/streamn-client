@@ -13,7 +13,7 @@ import {
 import { Track, ConnectionState, RoomEvent } from "livekit-client";
 import { IframePlayer, type IframePlayerHandle } from "./iframe-player";
 import type { MediaDetail } from "@/lib/media";
-import { Mic, MicOff, Volume2, Users, Crown } from "lucide-react";
+import { Mic, MicOff, Volume2, Users, Crown, Pin } from "lucide-react";
 
 export function WatchPartyPlayer({
   item,
@@ -49,7 +49,12 @@ export function WatchPartyPlayer({
 
   const [micEnabled, setMicEnabled] = useState(true);
   const [voiceVolume, setVoiceVolume] = useState(1);
+
+  // Auto-hiding overlay state
   const [showOverlay, setShowOverlay] = useState(true);
+  const [isOverlayPinned, setIsOverlayPinned] = useState(false);
+  const hideOverlayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isHoveringOverlayRef = useRef(false);
 
   // Dynamic host status check
   const isEffectiveHost = activeHostIdentity ? localIdentity === activeHostIdentity : initialIsHost;
@@ -57,6 +62,28 @@ export function WatchPartyPlayer({
 
   // Track timestamp until which we ignore iframe video events to avoid echo loops
   const ignoreLocalEventsUntilRef = useRef(0);
+
+  // Auto-hide overlay after mouse inactivity (3.5 seconds)
+  const triggerOverlayVisibility = useCallback(() => {
+    if (isOverlayPinned) {
+      setShowOverlay(true);
+      return;
+    }
+    setShowOverlay(true);
+    if (hideOverlayTimerRef.current) clearTimeout(hideOverlayTimerRef.current);
+    hideOverlayTimerRef.current = setTimeout(() => {
+      if (!isHoveringOverlayRef.current && !isOverlayPinned) {
+        setShowOverlay(false);
+      }
+    }, 3500);
+  }, [isOverlayPinned]);
+
+  useEffect(() => {
+    triggerOverlayVisibility();
+    return () => {
+      if (hideOverlayTimerRef.current) clearTimeout(hideOverlayTimerRef.current);
+    };
+  }, [triggerOverlayVisibility]);
 
   // Safe publish data helper
   const sendData = useCallback((dataObj: object, reliable = true) => {
@@ -251,7 +278,10 @@ export function WatchPartyPlayer({
   }, [canControl, isEffectiveHost, localIdentity, broadcastHostSync, requestHostSync, sendData]);
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden">
+    <div 
+      className="relative w-full h-screen bg-black overflow-hidden"
+      onMouseMove={triggerOverlayVisibility}
+    >
       {/* Remote Audio Tracks with volume control (Skip local participant to prevent SDK volume warnings) */}
       {audioTracks
         .filter(isTrackReference)
@@ -276,11 +306,15 @@ export function WatchPartyPlayer({
         onVideoEvent={handleVideoEvent}
       />
 
-      {/* Mic Mute Button in Floating Top Bar */}
-      <div className="absolute top-6 left-6 z-40 flex items-center gap-3">
+      {/* Mic & Party Toggle Buttons in Floating Top Bar */}
+      <div 
+        className={`absolute top-6 left-6 z-40 flex items-center gap-3 transition-opacity duration-300 ${
+          showOverlay ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+      >
         <button
           onClick={toggleMic}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs backdrop-blur-xl border transition-all pointer-events-auto shadow-lg ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs backdrop-blur-xl border transition-all cursor-pointer shadow-lg ${
             micEnabled
               ? "bg-black/60 text-white border-white/20 hover:bg-black/80"
               : "bg-red-500/80 text-white border-red-500 hover:bg-red-600"
@@ -289,12 +323,34 @@ export function WatchPartyPlayer({
           {micEnabled ? <Mic className="size-4" /> : <MicOff className="size-4" />}
           <span>{micEnabled ? "Mic On" : "Muted"}</span>
         </button>
+
+        <button
+          onClick={() => {
+            setIsOverlayPinned((prev) => !prev);
+            setShowOverlay(true);
+          }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs backdrop-blur-xl border transition-all cursor-pointer shadow-lg ${
+            isOverlayPinned
+              ? "bg-indigo-500/80 text-white border-indigo-400"
+              : "bg-black/60 text-white/80 border-white/20 hover:bg-black/80 hover:text-white"
+          }`}
+          title={isOverlayPinned ? "Unpin Voice Overlay" : "Pin Voice Overlay"}
+        >
+          <Users className="size-4" />
+          <span>{participants.length} Online</span>
+          {isOverlayPinned && <Pin className="size-3 fill-current ml-0.5" />}
+        </button>
       </div>
 
-      {/* Voice Call Overlay */}
+      {/* Voice Call Overlay (Auto-hides on idle, stays open when hovered or pinned) */}
       <div 
-        className={`absolute bottom-24 right-6 w-72 max-h-[60vh] overflow-y-auto bg-black/60 backdrop-blur-2xl border border-white/10 rounded-3xl p-4 shadow-2xl transition-all duration-500 pointer-events-auto z-40 ${
-          showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
+        onMouseEnter={() => { isHoveringOverlayRef.current = true; }}
+        onMouseLeave={() => {
+          isHoveringOverlayRef.current = false;
+          triggerOverlayVisibility();
+        }}
+        className={`absolute bottom-24 right-6 w-72 max-h-[60vh] overflow-y-auto bg-black/60 backdrop-blur-2xl border border-white/10 rounded-3xl p-4 shadow-2xl transition-all duration-500 z-40 ${
+          showOverlay ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-10 pointer-events-none"
         }`}
       >
         <div className="flex items-center justify-between mb-4 px-2">
@@ -303,17 +359,26 @@ export function WatchPartyPlayer({
             Watch Party
           </div>
 
-          <button
-            onClick={toggleMic}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
-              micEnabled
-                ? "bg-white/10 text-white hover:bg-white/20"
-                : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-            }`}
-          >
-            {micEnabled ? <Mic className="size-3" /> : <MicOff className="size-3" />}
-            <span>{micEnabled ? "Mic On" : "Muted"}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsOverlayPinned((prev) => !prev)}
+              className={`p-1 rounded-full transition ${isOverlayPinned ? "text-indigo-400" : "text-white/40 hover:text-white"}`}
+              title={isOverlayPinned ? "Pinned (Always Visible)" : "Click to Pin"}
+            >
+              <Pin className="size-3.5" />
+            </button>
+            <button
+              onClick={toggleMic}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                micEnabled
+                  ? "bg-white/10 text-white hover:bg-white/20"
+                  : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+              }`}
+            >
+              {micEnabled ? <Mic className="size-3" /> : <MicOff className="size-3" />}
+              <span>{micEnabled ? "Mic On" : "Muted"}</span>
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2.5">

@@ -5,8 +5,11 @@ import {
   useParticipants,
   useRoomContext,
   useConnectionState,
+  useTracks,
+  AudioTrack,
+  isTrackReference,
 } from "@livekit/components-react";
-import { ConnectionState, RoomEvent } from "livekit-client";
+import { Track, ConnectionState, RoomEvent } from "livekit-client";
 import { Mic, MicOff, Play, Settings, ShieldAlert, UserMinus, Users } from "lucide-react";
 import type { MediaDetail } from "@/lib/media";
 import { WatchPartyPlayer } from "./watch-party-player";
@@ -34,6 +37,7 @@ export function WatchPartyRoom({
   const room = useRoomContext();
   const participants = useParticipants();
   const connectionState = useConnectionState();
+  const audioTracks = useTracks([Track.Source.Microphone]);
   const localIdentity = room.localParticipant.identity;
 
   const [micEnabled, setMicEnabled] = useState(true);
@@ -203,6 +207,13 @@ export function WatchPartyRoom({
   // LOBBY UI
   return (
     <div className="flex h-screen flex-col bg-[#0a0a0a] text-white">
+      {/* Remote Audio Tracks in Lobby so participants can hear each other */}
+      {audioTracks
+        .filter(isTrackReference)
+        .filter((track) => !track.participant.isLocal)
+        .map((track) => (
+          <AudioTrack key={track.participant.identity} trackRef={track} />
+        ))}
       {/* Header */}
       <header className="flex items-center justify-between px-8 py-6 border-b border-white/10">
         <div>

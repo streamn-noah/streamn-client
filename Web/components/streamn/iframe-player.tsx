@@ -13,6 +13,8 @@ import {
   X,
   Play,
   Pause,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { MediaSummary, MediaType } from "@/lib/media";
 import { cinesrcUrl } from "@/lib/media";
@@ -73,6 +75,24 @@ export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
   // Custom video control states for CineSrc
   const [isPlaying, setIsPlaying] = useState(true);
   const [isBuffering, setIsBuffering] = useState(true);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+
+  const handleVolumeChange = (newVol: number) => {
+    setVolume(newVol);
+    setIsMuted(newVol === 0);
+    postCineSrcCommand("volume", [newVol]);
+  };
+
+  const toggleMute = () => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if (nextMuted) {
+      postCineSrcCommand("mute", []);
+    } else {
+      postCineSrcCommand("volume", [volume > 0 ? volume : 1]);
+    }
+  };
 
   // Watch session tracking
   const progressRef = useRef(0);
@@ -205,6 +225,18 @@ export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
       if (func === "seek") {
         win.postMessage({ type: "cinesrc:command", command: "seek", args }, "*");
         win.postMessage({ type: "cinesrc:command", command: "currentTime", args }, "*");
+      } else if (func === "volume") {
+        const volNum = typeof args[0] === "number" ? args[0] : 1;
+        win.postMessage({ type: "cinesrc:command", command: "volume", args: [volNum] }, "*");
+        win.postMessage({ type: "cinesrc:command", command: "setVolume", args: [volNum] }, "*");
+        win.postMessage({ type: "cinesrc:command", command: "setVolume", args: [Math.round(volNum * 100)] }, "*");
+        win.postMessage({ type: "cinesrc:command", command: "setMuted", args: [volNum === 0] }, "*");
+      } else if (func === "mute") {
+        win.postMessage({ type: "cinesrc:command", command: "mute", args: [] }, "*");
+        win.postMessage({ type: "cinesrc:command", command: "setMuted", args: [true] }, "*");
+      } else if (func === "unmute") {
+        win.postMessage({ type: "cinesrc:command", command: "unmute", args: [] }, "*");
+        win.postMessage({ type: "cinesrc:command", command: "setMuted", args: [false] }, "*");
       } else {
         win.postMessage({ type: "cinesrc:command", command: func, args }, "*");
       }
@@ -292,24 +324,24 @@ export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
     >
       {/* Top Controls Header Overlay */}
       <div
-        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-6 bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-3 sm:p-6 bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
           }`}
       >
         {/* Left: Back Button */}
         <button
           onClick={handleClose}
-          className="p-2 rounded-full hover:bg-white/10 text-white/90 hover:text-white transition cursor-pointer"
+          className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-white/90 hover:text-white transition cursor-pointer"
           aria-label="Back"
         >
-          <ArrowLeft className="size-6" />
+          <ArrowLeft className="size-5 sm:size-6" />
         </button>
 
         {/* Center: Title & Subtitle */}
-        <div className="flex flex-col items-center text-center px-4 max-w-xl truncate">
-          <h1 className="text-base md:text-lg font-bold text-white truncate drop-shadow-md">
+        <div className="flex flex-col items-center text-center px-2 max-w-[40vw] sm:max-w-xl truncate">
+          <h1 className="text-xs sm:text-base md:text-lg font-bold text-white truncate drop-shadow-md">
             {item.title}
           </h1>
-          <p className="text-xs md:text-sm text-white/70 font-medium truncate drop-shadow">
+          <p className="text-[10px] sm:text-xs md:text-sm text-white/70 font-medium truncate drop-shadow">
             {mediaType === "movie"
               ? "Movie"
               : `Season ${season}, Ep. ${episode}`}
@@ -317,15 +349,15 @@ export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
         </div>
 
         {/* Right Controls */}
-        <div className="flex items-center gap-3 text-white/90">
+        <div className="flex items-center gap-1.5 sm:gap-3 text-white/90">
           {/* Server / Provider Selector */}
           <div className="relative">
             <button
               onClick={() => setShowServerMenu(!showServerMenu)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold text-white backdrop-blur-md border border-white/15 transition cursor-pointer"
+              className="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] sm:text-xs font-semibold text-white backdrop-blur-md border border-white/15 transition cursor-pointer"
               title="Change Source Provider"
             >
-              <Server className="size-4" />
+              <Server className="size-3.5 sm:size-4" />
               <span className="capitalize">{provider}</span>
             </button>
 
@@ -356,19 +388,19 @@ export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
           {/* Fullscreen Toggle */}
           <button
             onClick={toggleFullscreen}
-            className="p-2 rounded-full hover:bg-white/10 hover:text-white transition cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 hover:text-white transition cursor-pointer"
             title="Fullscreen"
           >
-            {isFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
+            {isFullscreen ? <Minimize className="size-4 sm:size-5" /> : <Maximize className="size-4 sm:size-5" />}
           </button>
 
           {/* Close (X) */}
           <button
             onClick={handleClose}
-            className="p-2 rounded-full hover:bg-white/10 hover:text-white transition border-l border-white/20 ml-1 pl-3 cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 hover:text-white transition border-l border-white/20 ml-0.5 pl-2 sm:pl-3 cursor-pointer"
             title="Close"
           >
-            <X className="size-5" />
+            <X className="size-4 sm:size-5" />
           </button>
         </div>
       </div>
@@ -404,18 +436,47 @@ export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
       {/* Custom Bottom Controls (only when native are hidden) */}
       {hideNativeControls && (
         <div
-          className={`absolute bottom-0 left-0 right-0 z-30 flex items-center justify-between px-6 py-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+          className={`absolute bottom-0 left-0 right-0 z-30 flex items-center justify-between px-3 py-2.5 sm:px-6 sm:py-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         >
-          <div className="flex items-center gap-4 w-full max-w-5xl mx-auto">
+          <div className="flex items-center gap-2 sm:gap-4 w-full max-w-5xl mx-auto">
             <button
               onClick={togglePlay}
-              className="p-2 text-white/90 hover:text-white transition"
+              className="p-1 sm:p-2 text-white/90 hover:text-white transition cursor-pointer"
             >
-              {isPlaying ? <Pause className="size-6" /> : <Play className="size-6" />}
+              {isPlaying ? <Pause className="size-5 sm:size-6" /> : <Play className="size-5 sm:size-6" />}
             </button>
 
-            <div className="flex-1 flex items-center gap-3">
-              <span className="text-xs font-medium text-white/70 w-12 text-right">
+            {/* Volume Control */}
+            <div 
+              className="flex items-center gap-1 sm:gap-2 pr-1.5 sm:pr-2 border-r border-white/10"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={toggleMute}
+                className="p-1 sm:p-1.5 text-white/90 hover:text-white transition cursor-pointer"
+                title={isMuted ? "Unmute" : "Mute"}
+              >
+                {isMuted || volume === 0 ? (
+                  <VolumeX className="size-4 sm:size-5 text-red-400" />
+                ) : (
+                  <Volume2 className="size-4 sm:size-5 text-white/90" />
+                )}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isMuted ? 0 : volume}
+                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                className="w-12 sm:w-20 accent-white cursor-pointer opacity-80 hover:opacity-100 transition-opacity"
+                title="Volume"
+              />
+            </div>
+
+            <div className="flex-1 flex items-center gap-2 sm:gap-3">
+              <span className="text-[10px] sm:text-xs font-medium text-white/70 w-8 sm:w-12 text-right">
                 {Math.floor(progressRef.current / 60)}:
                 {Math.floor(progressRef.current % 60)
                   .toString()
