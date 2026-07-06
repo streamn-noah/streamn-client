@@ -41,7 +41,7 @@ function StreamnNavInner() {
         if (data.movieGenres) setMovieGenres(data.movieGenres);
         if (data.tvGenres) setTvGenres(data.tvGenres);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Close categories flyout on click outside
@@ -121,9 +121,8 @@ function StreamnNavInner() {
               <RiHome5Line className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
             )}
             <span
-              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[40ms] ${
-                isActive("/discover") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
-              }`}
+              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[40ms] ${isActive("/discover") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
+                }`}
             >
               Home
             </span>
@@ -131,7 +130,7 @@ function StreamnNavInner() {
 
           {/* Search */}
           <Link
-            href="/"
+            href="/search"
             className="flex items-center gap-4 px-3 py-2.5 transition-colors group/item"
           >
             {isActive("/") ? (
@@ -140,9 +139,8 @@ function StreamnNavInner() {
               <RiSearch2Line className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
             )}
             <span
-              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[80ms] ${
-                isActive("/") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
-              }`}
+              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[80ms] ${isActive("/") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
+                }`}
             >
               Search
             </span>
@@ -159,9 +157,8 @@ function StreamnNavInner() {
               <RiTv2Line className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
             )}
             <span
-              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[120ms] ${
-                isActive("/discover?tab=shows") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
-              }`}
+              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[120ms] ${isActive("/discover?tab=shows") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
+                }`}
             >
               Series
             </span>
@@ -178,9 +175,8 @@ function StreamnNavInner() {
               <RiFilmLine className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
             )}
             <span
-              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[160ms] ${
-                isActive("/discover?tab=movies") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
-              }`}
+              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[160ms] ${isActive("/discover?tab=movies") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
+                }`}
             >
               Movies
             </span>
@@ -299,9 +295,8 @@ function StreamnNavInner() {
       >
         <Link
           href="/discover"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            isActive("/discover") ? "text-white font-bold scale-105" : "text-white/50"
-          }`}
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/discover") ? "text-white font-bold scale-105" : "text-white/50"
+            }`}
         >
           {isActive("/discover") ? (
             <RiHome5Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
@@ -313,11 +308,10 @@ function StreamnNavInner() {
 
         <Link
           href="/"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            isActive("/") ? "text-white font-bold scale-105" : "text-white/50"
-          }`}
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/") ? "text-white font-bold scale-105" : "text-white/50"
+            }`}
         >
-          {isActive("/") ? (
+          {isActive("/search") ? (
             <RiSearch2Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
           ) : (
             <RiSearch2Line className="w-5 h-5" />
@@ -327,9 +321,8 @@ function StreamnNavInner() {
 
         <Link
           href="/discover?tab=shows"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            isActive("/discover?tab=shows") ? "text-white font-bold scale-105" : "text-white/50"
-          }`}
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/discover?tab=shows") ? "text-white font-bold scale-105" : "text-white/50"
+            }`}
         >
           {isActive("/discover?tab=shows") ? (
             <RiTv2Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
@@ -341,9 +334,8 @@ function StreamnNavInner() {
 
         <Link
           href="/discover?tab=movies"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            isActive("/discover?tab=movies") ? "text-white font-bold scale-105" : "text-white/50"
-          }`}
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/discover?tab=movies") ? "text-white font-bold scale-105" : "text-white/50"
+            }`}
         >
           {isActive("/discover?tab=movies") ? (
             <RiFilmFill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
@@ -355,9 +347,8 @@ function StreamnNavInner() {
 
         <Link
           href="/library"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
-            isActive("/library") ? "text-white font-bold scale-105" : "text-white/50"
-          }`}
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/library") ? "text-white font-bold scale-105" : "text-white/50"
+            }`}
         >
           {isActive("/library") ? (
             <RiUser3Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />

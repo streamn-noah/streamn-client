@@ -156,11 +156,11 @@ export const DetailBackdropPlayer = forwardRef<
           id={`detail-yt-player-${trailerKey}`}
           ref={iframeRef}
           onLoad={() => setVideoLoaded(true)}
-          src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1`}
+          src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&playsinline=1`}
           className={`w-[170%] h-[170%] absolute top-0 left-1/2 -translate-x-1/2 object-cover pointer-events-none scale-125 min-w-full min-h-full transition-opacity duration-700 ${
             videoLoaded ? "opacity-100" : "opacity-0"
           }`}
-          allow='autoplay; encrypted-media'
+          allow='autoplay; encrypted-media; picture-in-picture'
           title='Backdrop Trailer'
         />
       ) : null}

@@ -77,13 +77,14 @@ export function cinesrcUrl(
   season = 1,
   episode = 1,
   startSeconds?: number,
+  controls = true
 ) {
   const params = new URLSearchParams({
     color: "#e50914",
     back: "close",
     autoplay: "true",
     muted: "true",
-    controls: "true",
+    controls: controls ? "true" : "false",
     prioritize: "true",
   });
 

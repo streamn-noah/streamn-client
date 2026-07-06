@@ -11,6 +11,7 @@ import {
   Play,
   Star,
   ThumbsUp,
+  Users,
   Volume2,
   VolumeX,
   X,
@@ -24,6 +25,7 @@ import {
 } from "@/components/streamn/detail-backdrop-player";
 import { IframePlayer } from "@/components/streamn/iframe-player";
 import { WatchlistPicker } from "@/components/streamn/watchlist-picker";
+import { WatchPartyInviteModal } from "@/components/streamn/watch-party-invite-modal";
 import type { Episode, MediaDetail, MediaSummary } from "@/lib/media";
 import { cinesrcUrl, tmdbImage } from "@/lib/media";
 import { fetchStreamSources } from "@/lib/stream-source";
@@ -191,14 +193,13 @@ export function MediaDetailContent({
   const [muted, setMuted] = useState(true);
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(true);
   const [isDescriptionVisible, setIsDescriptionVisible] = useState(true);
+  const [isWatchPartyModalOpen, setIsWatchPartyModalOpen] = useState(false);
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Provider: "cinesrc" (default) loads via iframe; "backend" checks HLS API
   const isBackend =
     (process.env.NEXT_PUBLIC_STREAM_PROVIDER || "cinesrc") === "backend";
   const cinesrcContainerRef = useRef<HTMLDivElement>(null);
-  const cinesrcIframeRef = useRef<HTMLIFrameElement>(null);
-  const [iframeLoaded, setIframeLoaded] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
 
   const startHideTimer = () => {
@@ -265,43 +266,12 @@ export function MediaDetailContent({
   const season = watchProgress?.seasonNumber ?? firstEpisode?.seasonNumber ?? 1;
   const episode = watchProgress?.episodeNumber ?? firstEpisode?.episodeNumber ?? 1;
 
-  // Reset iframe preload state whenever the media / episode changes
+  // Reset player overlay state whenever the media / episode changes
   useEffect(() => {
     if (!isBackend) {
-      setIframeLoaded(false);
       setShowFullscreen(false);
     }
   }, [detail.id, detail.mediaType, season, episode, isBackend]);
-
-  // CineSrc sends MEDIA_DATA / cinesrc:loadedmetadata / play / timeupdate once sources are resolved and the
-  // player is actually ready — use this as the ONLY "truly ready" signal for the Watch Now button.
-  useEffect(() => {
-    if (isBackend) return;
-    const handler = (event: MessageEvent) => {
-      // Verify origin and source to ensure it comes from our detail iframe
-      const origin = event.origin || "";
-      if (!origin.includes("cinesrc.st") && !origin.includes("cinesrc.net")) return;
-      if (cinesrcIframeRef.current && event.source !== cinesrcIframeRef.current.contentWindow) return;
-      
-      const data = event.data;
-      if (!data) return;
-      const eventType = data.type || data.event || "";
-      if (
-        eventType === "MEDIA_DATA" ||
-        eventType === "play" ||
-        eventType === "timeupdate" ||
-        eventType === "cinesrc:play" ||
-        eventType === "cinesrc:timeupdate" ||
-        eventType === "cinesrc:loadedmetadata" ||
-        eventType === "cinesrc:ready" ||
-        eventType === "ready"
-      ) {
-        setIframeLoaded(true);
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [isBackend]);
 
   // Sync overlay state when the user exits native fullscreen (Escape key, etc.)
   useEffect(() => {
@@ -482,45 +452,36 @@ export function MediaDetailContent({
                 </Link>
               )
             ) : (
-              // CineSrc: iframe preloads silently in background; button activates on load
-              !iframeLoaded ? (
-                <button
-                  disabled
-                  className='flex items-center gap-3 bg-white/70 text-black/70 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl backdrop-blur-sm'
-                  type='button'
-                >
-                  <div className='w-7 h-7 rounded-full bg-black/80 flex items-center justify-center text-white shrink-0 animate-spin'>
-                    <Loader2 className='size-3.5' />
-                  </div>
-                  <div className='flex flex-col text-left'>
-                    <span className='text-sm font-black leading-none'>Loading player...</span>
-                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
-                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
-                    </span>
-                  </div>
-                </button>
-              ) : (
-                <button
-                  onClick={openCinesrcFullscreen}
-                  className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl cursor-pointer'
-                  type='button'
-                >
-                  <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
-                    <Play className='size-3.5 fill-current ml-0.5' />
-                  </div>
-                  <div className='flex flex-col text-left'>
-                    <span className='text-sm font-black leading-none'>
-                      {watchProgress ? "Continue Watching" : "Watch Now"}
-                    </span>
-                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
-                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
-                    </span>
-                  </div>
-                </button>
-              )
+              <button
+                onClick={openCinesrcFullscreen}
+                className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl cursor-pointer'
+                type='button'
+              >
+                <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
+                  <Play className='size-3.5 fill-current ml-0.5' />
+                </div>
+                <div className='flex flex-col text-left'>
+                  <span className='text-sm font-black leading-none'>
+                    {watchProgress ? "Continue Watching" : "Watch Now"}
+                  </span>
+                  <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
+                    {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                  </span>
+                </div>
+              </button>
             )}
 
             <WatchlistPicker iconOnly item={detail} menuPosition='up' />
+
+            <button
+              aria-label="Create Watch Party"
+              className="w-11 h-11 rounded-full border bg-white/10 hover:bg-white/20 text-white border-white/20 flex items-center justify-center transition-all"
+              onClick={() => setIsWatchPartyModalOpen(true)}
+              type='button'
+              title="Create Watch Party"
+            >
+              <Users className="size-5" />
+            </button>
 
             <button
               aria-label={liked ? "Unlike" : "Like"}
@@ -542,7 +503,7 @@ export function MediaDetailContent({
           {detail.trailerKey ? (
             <button
               aria-label={isPlayingTrailer ? "Pause trailer" : "Play trailer"}
-              className='hidden md:flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105'
+              className='flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105'
               onClick={() => {
                 playerRef.current?.togglePlay();
                 setIsPlayingTrailer((prev) => !prev);
@@ -617,17 +578,12 @@ export function MediaDetailContent({
       </section>
     </div>
 
-    {/* CineSrc: hidden preload iframe container — mounted immediately so the player loads in the background.
-        When showFullscreen=true the container expands to cover the entire viewport. */}
-    {!isBackend && (
+    {/* CineSrc player container — mounted when showFullscreen is true */}
+    {!isBackend && showFullscreen && (
       <div
         ref={cinesrcContainerRef}
         onClick={(e) => e.stopPropagation()}
-        className={`fixed inset-0 bg-black transition-opacity duration-300 ${
-          showFullscreen
-            ? "opacity-100 z-[9999] pointer-events-auto"
-            : "opacity-0 -z-10 pointer-events-none"
-        }`}
+        className="fixed inset-0 bg-black z-[9999] pointer-events-auto"
       >
         <IframePlayer
           mediaType={detail.mediaType}
@@ -635,11 +591,19 @@ export function MediaDetailContent({
           season={season}
           episode={episode}
           item={detail}
-          onReady={() => setIframeLoaded(true)}
           onClose={closeCinesrcFullscreen}
         />
       </div>
     )}
+
+    <WatchPartyInviteModal
+      isOpen={isWatchPartyModalOpen}
+      onClose={() => setIsWatchPartyModalOpen(false)}
+      mediaType={detail.mediaType}
+      mediaId={detail.id}
+      season={season}
+      episode={episode}
+    />
     </>
   );
 }

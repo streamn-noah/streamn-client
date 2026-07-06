@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -11,6 +11,8 @@ import {
   Minimize,
   Server,
   X,
+  Play,
+  Pause,
 } from "lucide-react";
 import type { MediaSummary, MediaType } from "@/lib/media";
 import { cinesrcUrl } from "@/lib/media";
@@ -18,6 +20,13 @@ import { commitWatchSession, getWatchProgress } from "@/lib/streamn-storage";
 import { syncWatchSession } from "@/lib/user-actions";
 
 export type StreamProviderType = "backend" | "cinesrc";
+
+export type IframePlayerHandle = {
+  postCommand: (func: string, args?: unknown[]) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  getIsPlaying: () => boolean;
+};
 
 type IframePlayerProps = {
   mediaType: MediaType;
@@ -28,22 +37,28 @@ type IframePlayerProps = {
   nextHref?: string | null;
   onSwitchToBackend?: () => void;
   initialProvider?: StreamProviderType;
+  hideNativeControls?: boolean;
   onReady?: () => void;
   onClose?: () => void;
+  onVideoEvent?: (type: string, current: number, duration: number) => void;
 };
 
-export function IframePlayer({
-  mediaType,
-  mediaId,
-  season,
-  episode,
-  item,
-  nextHref,
-  onSwitchToBackend,
-  initialProvider = "cinesrc",
-  onReady,
-  onClose,
-}: IframePlayerProps) {
+export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
+  function IframePlayer(props, ref) {
+    const {
+      mediaType,
+      mediaId,
+      season,
+      episode,
+      item,
+      nextHref,
+      onSwitchToBackend,
+      initialProvider = "cinesrc",
+      hideNativeControls = false,
+      onReady,
+      onClose,
+      onVideoEvent,
+    } = props;
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -120,58 +135,44 @@ export function IframePlayer({
 
       if (!isCineSrc) return;
 
-      let payload = event.data;
-      if (typeof payload === "string") {
-        try {
-          payload = JSON.parse(payload);
-        } catch {
-          payload = { event: payload };
-        }
-      }
-
+      const payload = event.data;
       if (!payload || typeof payload !== "object") return;
 
-      // Normalize event payload
-      const eventType = String(payload.type || payload.event || payload.action || payload.name || "");
-      const current = Number(payload.currentTime ?? payload.current_time ?? payload.progress ?? payload.time ?? 0);
-      const dur = Number(payload.duration ?? payload.totalTime ?? 0);
+      const type = payload.type;
+      
+      if (type === "cinesrc:timeupdate" || type === "cinesrc:seeking" || type === "cinesrc:seeked") {
+        const current = payload.currentTime || 0;
+        const dur = payload.duration || 0;
 
-      if (current > 0) {
-        progressRef.current = current;
-      }
-      if (dur > 0) {
-        durationRef.current = dur;
-      }
+        if (current > 0) progressRef.current = current;
+        if (dur > 0) durationRef.current = dur;
 
-      if (eventType.includes("ended")) {
+        setIsBuffering(false);
         persistSession();
-        if (mediaType === "tv" && nextHref) {
-          setShowAutoplay(true);
-        }
-      } else if (eventType.includes("close")) {
-        persistSession();
-        if (onClose) onClose();
-        else router.back();
-      } else if (eventType.includes("play")) {
+        if (onReady) onReady();
+        if (onVideoEvent) onVideoEvent(type.split(":")[1], current, dur);
+      } else if (type === "cinesrc:play") {
         setIsPlaying(true);
         setIsBuffering(false);
         persistSession();
         if (onReady) onReady();
-      } else if (eventType.includes("pause")) {
+        if (onVideoEvent) onVideoEvent("play", progressRef.current, durationRef.current);
+      } else if (type === "cinesrc:pause") {
         setIsPlaying(false);
         persistSession();
-      } else if (eventType.includes("timeupdate")) {
-        setIsBuffering(false);
+        if (onVideoEvent) onVideoEvent("pause", progressRef.current, durationRef.current);
+      } else if (type === "cinesrc:ended") {
         persistSession();
-        if (onReady) onReady();
-      } else if (
-        eventType.includes("MEDIA_DATA") ||
-        eventType.includes("ready") ||
-        eventType.includes("loadedmetadata")
-      ) {
-        setIsBuffering(false);
+        if (mediaType === "tv" && nextHref) {
+          setShowAutoplay(true);
+        }
+      } else if (type === "cinesrc:close") {
         persistSession();
-        if (onReady) onReady();
+        if (onClose) onClose();
+        else router.back();
+      } else if (type === "cinesrc:ready" || type === "cinesrc:loadedmetadata") {
+        setIsBuffering(false);
+        if (onVideoEvent) onVideoEvent("ready", progressRef.current, durationRef.current);
       }
     };
 
@@ -195,32 +196,27 @@ export function IframePlayer({
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, [persistSession]);
 
-  // Post commands to CineSrc iframe using robust multi-format dispatching
+  // Post commands to CineSrc iframe using official API
   const postCineSrcCommand = (func: string, args: unknown[] = []) => {
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
 
-    const val = args[0];
-    const obj = {
-      type: func,
-      event: func,
-      action: func,
-      method: func,
-      command: func,
-      api: func,
-      value: val,
-      arg: val,
-      args,
-    };
-
     try {
-      win.postMessage(obj, "*");
-      win.postMessage(JSON.stringify(obj), "*");
-      win.postMessage(JSON.stringify({ event: "command", func, args }), "*");
-      win.postMessage(JSON.stringify({ method: func, value: val, arg: val }), "*");
-      win.postMessage(func, "*");
+      if (func === "seek") {
+        win.postMessage({ type: "cinesrc:command", command: "seek", args }, "*");
+        win.postMessage({ type: "cinesrc:command", command: "currentTime", args }, "*");
+      } else {
+        win.postMessage({ type: "cinesrc:command", command: func, args }, "*");
+      }
     } catch {}
   };
+
+  useImperativeHandle(ref, () => ({
+    postCommand: (func: string, args: unknown[] = []) => postCineSrcCommand(func, args),
+    getCurrentTime: () => progressRef.current,
+    getDuration: () => durationRef.current,
+    getIsPlaying: () => isPlaying,
+  }));
 
   const togglePlay = () => {
     if (isPlaying) {
@@ -268,7 +264,7 @@ export function IframePlayer({
 
   // Get embed URL based on provider
   const getEmbedUrl = () => {
-    return cinesrcUrl(mediaType, mediaId, season, episode, startTime);
+    return cinesrcUrl(mediaType, mediaId, season, episode, startTime, !hideNativeControls);
   };
 
   const handleClose = () => {
@@ -382,12 +378,20 @@ export function IframePlayer({
         <iframe
           ref={iframeRef}
           src={getEmbedUrl()}
-          className="w-full h-full border-0 relative z-10"
-          // Sandbox attribute prevents popup windows, ad redirects, and unrequested page navigation!
+          className="w-full h-full border-0 pointer-events-auto"
           sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
           allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           allowFullScreen
+          title="Video Player"
         />
+
+        {/* Transparent Overlay to capture mouse events when native controls are hidden */}
+        {hideNativeControls && (
+          <div 
+            className="absolute inset-0 z-10 cursor-pointer"
+            onClick={togglePlay}
+          />
+        )}
 
         {/* Buffering Indicator */}
         {isBuffering && (
@@ -396,6 +400,55 @@ export function IframePlayer({
           </div>
         )}
       </div>
+
+      {/* Custom Bottom Controls (only when native are hidden) */}
+      {hideNativeControls && (
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-30 flex items-center justify-between px-6 py-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        >
+          <div className="flex items-center gap-4 w-full max-w-5xl mx-auto">
+            <button
+              onClick={togglePlay}
+              className="p-2 text-white/90 hover:text-white transition"
+            >
+              {isPlaying ? <Pause className="size-6" /> : <Play className="size-6" />}
+            </button>
+
+            <div className="flex-1 flex items-center gap-3">
+              <span className="text-xs font-medium text-white/70 w-12 text-right">
+                {Math.floor(progressRef.current / 60)}:
+                {Math.floor(progressRef.current % 60)
+                  .toString()
+                  .padStart(2, "0")}
+              </span>
+
+              <div className="relative flex-1 h-1.5 bg-white/20 rounded-full cursor-pointer group" onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const pct = Math.max(0, Math.min(1, x / rect.width));
+                const seekTime = durationRef.current * pct;
+                postCineSrcCommand("seek", [seekTime]);
+              }}>
+                <div 
+                  className="absolute top-0 left-0 h-full bg-white rounded-full transition-all duration-100 ease-linear"
+                  style={{ width: `${durationRef.current > 0 ? (progressRef.current / durationRef.current) * 100 : 0}%` }}
+                />
+                <div 
+                  className="absolute top-1/2 -mt-1.5 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ left: `calc(${durationRef.current > 0 ? (progressRef.current / durationRef.current) * 100 : 0}% - 6px)` }}
+                />
+              </div>
+
+              <span className="text-xs font-medium text-white/70 w-12">
+                {Math.floor(durationRef.current / 60)}:
+                {Math.floor(durationRef.current % 60)
+                  .toString()
+                  .padStart(2, "0")}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Next Episode Autoplay Overlay */}
       {showAutoplay && nextHref && (
@@ -425,4 +478,6 @@ export function IframePlayer({
       )}
     </div>
   );
-}
+});
+
+IframePlayer.displayName = "IframePlayer";

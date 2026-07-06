@@ -394,14 +394,10 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   const [genreResults, setGenreResults] = useState<MediaSummary[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
 
-  // CineSrc preloading for active banner item
+  // CineSrc banner player state
   const isBackend =
     (process.env.NEXT_PUBLIC_STREAM_PROVIDER || "cinesrc") === "backend";
-  const [bannerIframeLoaded, setBannerIframeLoaded] = useState(false);
   const [bannerShowFullscreen, setBannerShowFullscreen] = useState(false);
-  const [bannerPreloadSrc, setBannerPreloadSrc] = useState<string | null>(null);
-  
-  const bannerIframeRef = useRef<HTMLIFrameElement>(null);
   const bannerContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -436,7 +432,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
   const [bannerProgress, setBannerProgress] = useState<WatchProgress | null>(null);
 
-  // Initialize/Reset banner CineSrc preloading whenever the active banner item changes
+  // Reset banner player state whenever the active banner item changes
   useEffect(() => {
     setVideoLoaded(false);
     if (activeBanner) {
@@ -445,8 +441,13 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
       setBannerProgress(null);
     }
     if (!isBackend && activeBanner) {
-      setBannerIframeLoaded(false);
       setBannerShowFullscreen(false);
+    }
+    if (activeBanner?.trailerKey) {
+      const timer = setTimeout(() => {
+        setVideoLoaded(true);
+      }, 1000);
+      return () => clearTimeout(timer);
     }
   }, [activeBanner, isBackend, bannerIndex]);
 
@@ -511,33 +512,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     return () => window.clearTimeout(timer);
   }, [activeBanner, bannerIndex, bannerCount]);
 
-  // CineSrc message handler for active banner item iframe
-  useEffect(() => {
-    if (isBackend) return;
-    const handler = (event: MessageEvent) => {
-      const origin = event.origin || "";
-      if (!origin.includes("cinesrc.st") && !origin.includes("cinesrc.net")) return;
-      if (bannerIframeRef.current && event.source !== bannerIframeRef.current.contentWindow) return;
-      
-      const data = event.data;
-      if (!data) return;
-      const eventType = data.type || data.event || "";
-      if (
-        eventType === "MEDIA_DATA" ||
-        eventType === "play" ||
-        eventType === "timeupdate" ||
-        eventType === "cinesrc:play" ||
-        eventType === "cinesrc:timeupdate" ||
-        eventType === "cinesrc:loadedmetadata" ||
-        eventType === "cinesrc:ready" ||
-        eventType === "ready"
-      ) {
-        setBannerIframeLoaded(true);
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [isBackend]);
+
 
   // Sync banner native fullscreen change
   useEffect(() => {
@@ -781,10 +756,9 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
       {/* Hero Banner Section */}
       {tab !== "genre" && activeBanner && (
         <section className="relative w-full h-[80vh] min-h-[520px] overflow-hidden bg-black select-none">
-          {/* Video Backdrop Container (Mobile gets high-res backdrop image, Desktop gets video trailer) */}
+          {/* Video Backdrop Container */}
           <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-            {/* Mobile backdrop image */}
-            <div className="md:hidden relative w-full h-full">
+            <div className="relative w-full h-full">
               <Image
                 src={tmdbImage(
                   activeBanner.backdropPath || activeBanner.posterPath,
@@ -793,31 +767,20 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
                 alt={activeBanner.title}
                 fill
                 priority
-                className="object-cover object-top opacity-80"
-              />
-            </div>
-
-            {/* Desktop backdrop video trailer fading smoothly over high-res image */}
-            <div className="hidden md:block relative w-full h-full">
-              <Image
-                src={tmdbImage(
-                  activeBanner.backdropPath || activeBanner.posterPath,
-                  "original"
-                )}
-                alt={activeBanner.title}
-                fill
-                priority
-                className="object-cover object-top opacity-80"
+                className={`object-cover object-top transition-opacity duration-700 ${
+                  videoLoaded ? "opacity-0" : "opacity-80"
+                }`}
               />
               {activeBanner.trailerKey && (
                 <iframe
                   id={`banner-yt-player-${activeBanner.id}`}
                   ref={iframeRef}
-                  src={`https://www.youtube-nocookie.com/embed/${activeBanner.trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1`}
+                  onLoad={() => setVideoLoaded(true)}
+                  src={`https://www.youtube-nocookie.com/embed/${activeBanner.trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&playsinline=1`}
                   className={`w-[170%] h-[170%] absolute top-0 left-1/2 -translate-x-1/2 object-cover pointer-events-none scale-125 min-w-full min-h-full transition-opacity duration-700 ${
-                    videoLoaded ? "opacity-80" : "opacity-0"
+                    videoLoaded ? "opacity-100" : "opacity-0"
                   }`}
-                  allow="autoplay; encrypted-media"
+                  allow="autoplay; encrypted-media; picture-in-picture"
                   title="Backdrop Trailer"
                 />
               )}
@@ -827,8 +790,8 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent z-10" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
 
-          {/* Desktop Pause and Mute controls placed at FAR RIGHT EDGE of Banner */}
-          <div className="hidden md:flex absolute right-8 md:right-16 top-1/2 -translate-y-1/2 z-30 flex-col gap-3.5">
+          {/* Pause and Mute controls placed at right edge of Banner */}
+          <div className="flex absolute right-4 md:right-16 top-1/2 -translate-y-1/2 z-30 flex-col gap-3.5">
             <button
               onClick={togglePlayVideo}
               className="w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105"
@@ -890,15 +853,6 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
                   <Play className="w-4 h-4 fill-current ml-0.5" />
                   <span>{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
                 </Link>
-              ) : !bannerIframeLoaded ? (
-                <button
-                  disabled
-                  className="px-5 py-2.5 rounded-full bg-white/70 text-black/70 font-bold flex items-center gap-2 shadow-2xl cursor-not-allowed shrink-0"
-                  type="button"
-                >
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Loading Player...</span>
-                </button>
               ) : (
                 <button
                   onClick={openBannerCinesrcFullscreen}
@@ -1011,16 +965,12 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
         )}
       </ResponsiveMediaModal>
 
-      {/* CineSrc Banner Preloader Iframe container */}
-      {!isBackend && activeBanner && (
+      {/* CineSrc Banner Player Container */}
+      {!isBackend && activeBanner && bannerShowFullscreen && (
         <div
           ref={bannerContainerRef}
           onClick={(e) => e.stopPropagation()}
-          className={`fixed inset-0 bg-black transition-opacity duration-300 ${
-            bannerShowFullscreen
-              ? "opacity-100 z-[9999] pointer-events-auto"
-              : "opacity-0 -z-10 pointer-events-none"
-          }`}
+          className="fixed inset-0 bg-black z-[9999] pointer-events-auto"
         >
           <IframePlayer
             mediaType={activeBanner.mediaType}
@@ -1028,7 +978,6 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
             season={1}
             episode={1}
             item={activeBanner}
-            onReady={() => setBannerIframeLoaded(true)}
             onClose={closeBannerCinesrcFullscreen}
           />
         </div>
