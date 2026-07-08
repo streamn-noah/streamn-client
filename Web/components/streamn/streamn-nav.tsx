@@ -307,8 +307,8 @@ function StreamnNavInner() {
         </Link>
 
         <Link
-          href="/"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/") ? "text-white font-bold scale-105" : "text-white/50"
+          href="/search"
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/search") ? "text-white font-bold scale-105" : "text-white/50"
             }`}
         >
           {isActive("/search") ? (

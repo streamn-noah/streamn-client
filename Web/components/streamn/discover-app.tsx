@@ -14,17 +14,18 @@ import {
   Star,
   Loader2,
   X,
+  Download,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   DetailSkeleton,
   MediaDetailContent,
 } from "@/components/streamn/media-detail-content";
-import { IframePlayer } from "@/components/streamn/iframe-player";
 import { ResponsiveMediaModal } from "@/components/streamn/responsive-media-modal";
 import { StreamnNav } from "@/components/streamn/streamn-nav";
 import type { MediaDetail, MediaSummary, MediaType } from "@/lib/media";
 import { tmdbImage } from "@/lib/media";
+import { fetchStreamSources } from "@/lib/stream-source";
 import {
   getContinueWatching,
   watchHref,
@@ -32,7 +33,6 @@ import {
   getWatchProgress,
   type WatchProgress,
 } from "@/lib/streamn-storage";
-import { cinesrcUrl } from "@/lib/media";
 
 import disneyLogo from "@/assets/images/Disney_Plus_logo.svg";
 import netflixLogo from "@/assets/images/Netflix_2014_logo.svg";
@@ -394,11 +394,12 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   const [genreResults, setGenreResults] = useState<MediaSummary[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
 
-  // CineSrc banner player state
+  // Provider: "cinesrc" (default) loads via iframe; "backend"/"moviebox" checks HLS API/direct MP4
   const isBackend =
-    (process.env.NEXT_PUBLIC_STREAM_PROVIDER || "cinesrc") === "backend";
-  const [bannerShowFullscreen, setBannerShowFullscreen] = useState(false);
-  const bannerContainerRef = useRef<HTMLDivElement>(null);
+    ["backend", "moviebox"].includes(process.env.NEXT_PUBLIC_STREAM_PROVIDER || "cinesrc");
+
+  const [bannerSources, setBannerSources] = useState<any[]>([]);
+  const [bannerDownloadModalOpen, setBannerDownloadModalOpen] = useState(false);
 
   useEffect(() => {
     setContinueWatching(getContinueWatching());
@@ -440,16 +441,64 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     } else {
       setBannerProgress(null);
     }
-    if (!isBackend && activeBanner) {
-      setBannerShowFullscreen(false);
-    }
     if (activeBanner?.trailerKey) {
       const timer = setTimeout(() => {
         setVideoLoaded(true);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [activeBanner, isBackend, bannerIndex]);
+  }, [activeBanner, bannerIndex]);
+
+  // Fetch streams for active banner to compute size range and download options
+  useEffect(() => {
+    if (!activeBanner) {
+      setBannerSources([]);
+      return;
+    }
+
+    let isMounted = true;
+    setBannerSources([]);
+
+    // Use season/episode from progress or default to 1
+    const season = bannerProgress?.seasonNumber ?? 1;
+    const episode = bannerProgress?.episodeNumber ?? 1;
+
+    fetchStreamSources(activeBanner.mediaType, activeBanner.id, season, episode)
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.sources && res.sources.length > 0) {
+          setBannerSources(res.sources);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setBannerSources([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeBanner, bannerProgress]);
+
+  const bannerFileSizeRange = useMemo(() => {
+    if (!bannerSources || bannerSources.length === 0) return null;
+    const sizes = bannerSources.map((s) => s.size).filter(Boolean);
+    if (sizes.length === 0) return null;
+    if (sizes.length === 1) return sizes[0];
+
+    const parseSize = (sizeStr: string) => {
+      const num = parseFloat(sizeStr);
+      if (isNaN(num)) return 0;
+      if (sizeStr.toUpperCase().includes("GB")) return num * 1024;
+      return num; // MB
+    };
+
+    const sorted = [...bannerSources].sort((a, b) => parseSize(a.size) - parseSize(b.size));
+    const minSize = sorted[0].size;
+    const maxSize = sorted[sorted.length - 1].size;
+
+    if (minSize === maxSize) return minSize;
+    return `${minSize} - ${maxSize}`;
+  }, [bannerSources]);
 
   // YouTube IFrame Player API initialization (Without loop=1, state 0 ENDED fires reliably!)
   useEffect(() => {
@@ -514,27 +563,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
 
 
-  // Sync banner native fullscreen change
-  useEffect(() => {
-    const handler = () => {
-      if (!document.fullscreenElement) setBannerShowFullscreen(false);
-    };
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
 
-  const openBannerCinesrcFullscreen = () => {
-    setBannerShowFullscreen(true);
-    bannerContainerRef.current?.requestFullscreen?.().catch(() => {});
-  };
-
-  const closeBannerCinesrcFullscreen = () => {
-    setBannerShowFullscreen(false);
-    if (activeBanner) {
-      setBannerProgress(getWatchProgress(activeBanner.mediaType, activeBanner.id));
-    }
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-  };
 
   const getBannerMetaString = (item: MediaSummary) => {
     const allGenres = [...data.movieGenres, ...data.tvGenres];
@@ -835,8 +864,16 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
               </h1>
             )}
 
-            <div className="flex items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md">
+            <div className="flex items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md flex-wrap">
               <span>{getBannerMetaString(activeBanner)}</span>
+              {bannerFileSizeRange && (
+                <>
+                  <span>·</span>
+                  <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-[11px] font-bold text-blue-400 border border-blue-500/30">
+                    {bannerFileSizeRange}
+                  </span>
+                </>
+              )}
             </div>
 
             <p className="text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal">
@@ -844,23 +881,23 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
             </p>
 
             {/* Action Buttons: Centered on Mobile, Left-aligned on Desktop */}
-            <div className="flex items-center justify-center md:justify-start gap-3 w-full pt-1">
-              {isBackend ? (
-                <Link
-                  href={watchHref(activeBanner)}
-                  className="px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
-                >
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                  <span>{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
-                </Link>
-              ) : (
+            <div className="flex items-center justify-center md:justify-start gap-3 w-full pt-1 flex-wrap">
+              <Link
+                href={watchHref(activeBanner)}
+                className="px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
+              >
+                <Play className="w-4 h-4 fill-current ml-0.5" />
+                <span>{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
+              </Link>
+
+              {bannerSources.length > 0 && (
                 <button
-                  onClick={openBannerCinesrcFullscreen}
-                  className="px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0 cursor-pointer"
+                  onClick={() => setBannerDownloadModalOpen(true)}
+                  className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold flex items-center gap-2 shadow-2xl transition-transform hover:scale-105 border border-white/20 shrink-0"
                   type="button"
                 >
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                  <span>{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
                 </button>
               )}
 
@@ -965,21 +1002,48 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
         )}
       </ResponsiveMediaModal>
 
-      {/* CineSrc Banner Player Container */}
-      {!isBackend && activeBanner && bannerShowFullscreen && (
-        <div
-          ref={bannerContainerRef}
-          onClick={(e) => e.stopPropagation()}
-          className="fixed inset-0 bg-black z-[9999] pointer-events-auto"
-        >
-          <IframePlayer
-            mediaType={activeBanner.mediaType}
-            mediaId={activeBanner.id}
-            season={1}
-            episode={1}
-            item={activeBanner}
-            onClose={closeBannerCinesrcFullscreen}
-          />
+      {/* Banner Download Modal */}
+      {bannerDownloadModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4" onClick={() => setBannerDownloadModalOpen(false)}>
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#121214] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setBannerDownloadModalOpen(false)}
+              className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"
+            >
+              <X className="size-5" />
+            </button>
+            <h3 className="text-xl font-bold text-white mb-2">Download Options</h3>
+            <p className="text-sm text-white/60 mb-6 font-medium">Select a quality to download the media file directly.</p>
+            
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1 no-scrollbar">
+              {bannerSources.map((source, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all"
+                >
+                  <div className="min-w-0 pr-2">
+                    <div className="font-bold text-white text-base truncate">{source.quality || "Unknown Quality"}</div>
+                    <div className="text-xs text-white/40 mt-1 uppercase tracking-wider font-semibold">{source.type || "mp4"} · {source.size || "Unknown Size"}</div>
+                  </div>
+                  <a
+                    href={source.url}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-all shrink-0 hover:scale-105"
+                  >
+                    <Download className="size-4" />
+                    <span>Download</span>
+                  </a>
+                </div>
+              ))}
+              {bannerSources.length === 0 && (
+                <div className="text-center py-6 text-white/40 text-sm">
+                  No download links available.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </main>

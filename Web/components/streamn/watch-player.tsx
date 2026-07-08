@@ -31,7 +31,7 @@ export function WatchPlayer({
 
   return (
     <div className="flex-1 w-full h-full min-h-0 bg-black">
-      {provider === "backend" ? (
+      {provider === "backend" || provider === "moviebox" ? (
         <CustomPlayer
           episode={episode}
           item={item}
@@ -48,7 +48,7 @@ export function WatchPlayer({
           mediaId={mediaId}
           mediaType={mediaType}
           nextHref={nextHref}
-          onSwitchToBackend={() => setProvider("backend")}
+          onSwitchToBackend={() => setProvider("moviebox")}
           season={season}
         />
       )}

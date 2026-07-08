@@ -21,7 +21,7 @@ import { cinesrcUrl } from "@/lib/media";
 import { commitWatchSession, getWatchProgress } from "@/lib/streamn-storage";
 import { syncWatchSession } from "@/lib/user-actions";
 
-export type StreamProviderType = "backend" | "cinesrc";
+export type StreamProviderType = "backend" | "cinesrc" | "moviebox";
 
 export type IframePlayerHandle = {
   postCommand: (func: string, args?: unknown[]) => void;

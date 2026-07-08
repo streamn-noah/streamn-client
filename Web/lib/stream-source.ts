@@ -14,6 +14,8 @@ export type SourceItem = {
   type?: string;
   audioTracks?: AudioTrackItem[];
   provider?: ProviderInfo;
+  size?: string;
+  duration?: number;
 };
 
 export type SubtitleItem = {

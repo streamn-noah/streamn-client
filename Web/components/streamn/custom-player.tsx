@@ -361,7 +361,23 @@ export function CustomPlayer({
       hlsRef.current = null;
     }
 
-    if (Hls.isSupported()) {
+    const onLoadedMetadata = () => {
+      setIsBuffering(false);
+      if (video) setDuration(video.duration);
+      if (initialResumeRef.current && initialResumeRef.current > 0) {
+        video.currentTime = initialResumeRef.current;
+        initialResumeRef.current = null;
+      }
+      video.play().catch(() => setIsPlaying(false));
+    };
+
+    const onError = () => {
+      tryNextSource();
+    };
+
+    const isHls = streamUrl.includes(".m3u8") || currentSource.type === "hls" || currentSource.type === "m3u8";
+
+    if (isHls && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
@@ -402,23 +418,21 @@ export function CustomPlayer({
           tryNextSource();
         }
       });
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    } else if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) {
       // Safari native HLS
       video.src = streamUrl;
-      video.addEventListener("loadedmetadata", () => {
-        setIsBuffering(false);
-        if (initialResumeRef.current && initialResumeRef.current > 0) {
-          video.currentTime = initialResumeRef.current;
-          initialResumeRef.current = null;
-        }
-        video.play().catch(() => setIsPlaying(false));
-      });
-      video.addEventListener("error", () => {
-        tryNextSource();
-      });
+      video.addEventListener("loadedmetadata", onLoadedMetadata);
+      video.addEventListener("error", onError);
+    } else {
+      // Direct MP4 or other native formats (e.g. MovieBox MP4)
+      video.src = streamUrl;
+      video.addEventListener("loadedmetadata", onLoadedMetadata);
+      video.addEventListener("error", onError);
     }
 
     return () => {
+      video.removeEventListener("loadedmetadata", onLoadedMetadata);
+      video.removeEventListener("error", onError);
       if (hlsRef.current) {
         try {
           hlsRef.current.destroy();

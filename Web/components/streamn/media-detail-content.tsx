@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   AlertCircle,
   ChevronDown,
+  Download,
   Film,
   Loader2,
   Pause,
@@ -17,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   DetailBackdropPlayer,
@@ -196,12 +197,6 @@ export function MediaDetailContent({
   const [isWatchPartyModalOpen, setIsWatchPartyModalOpen] = useState(false);
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Provider: "cinesrc" (default) loads via iframe; "backend" checks HLS API
-  const isBackend =
-    (process.env.NEXT_PUBLIC_STREAM_PROVIDER || "cinesrc") === "backend";
-  const cinesrcContainerRef = useRef<HTMLDivElement>(null);
-  const [showFullscreen, setShowFullscreen] = useState(false);
-
   const startHideTimer = () => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => {
@@ -257,7 +252,9 @@ export function MediaDetailContent({
     setLikeBusy(false);
   }
 
-  const [sourceStatus, setSourceStatus] = useState<"loading" | "available" | "unavailable">(isBackend ? "loading" : "available");
+  const [sourceStatus, setSourceStatus] = useState<"loading" | "available" | "unavailable">("loading");
+  const [sources, setSources] = useState<any[]>([]);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
 
   const firstEpisode = detail.episodes[0];
   const [watchProgress, setWatchProgress] = useState(() =>
@@ -266,60 +263,57 @@ export function MediaDetailContent({
   const season = watchProgress?.seasonNumber ?? firstEpisode?.seasonNumber ?? 1;
   const episode = watchProgress?.episodeNumber ?? firstEpisode?.episodeNumber ?? 1;
 
-  // Reset player overlay state whenever the media / episode changes
+  // Probe source availability and fetch download info via the stream-source API
   useEffect(() => {
-    if (!isBackend) {
-      setShowFullscreen(false);
-    }
-  }, [detail.id, detail.mediaType, season, episode, isBackend]);
-
-  // Sync overlay state when the user exits native fullscreen (Escape key, etc.)
-  useEffect(() => {
-    const handler = () => {
-      if (!document.fullscreenElement) setShowFullscreen(false);
-    };
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
-
-  // Backend only: probe HLS source availability via the stream-source API
-  useEffect(() => {
-    if (!isBackend) return;
     let isMounted = true;
     setSourceStatus("loading");
+    setSources([]);
 
     fetchStreamSources(detail.mediaType, detail.id, season, episode)
       .then((res) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {
+          setSources(res.sources);
           setSourceStatus("available");
         } else {
           setSourceStatus("unavailable");
         }
       })
       .catch(() => {
-        if (isMounted) setSourceStatus("unavailable");
+        if (isMounted) {
+          setSourceStatus("unavailable");
+          setSources([]);
+        }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [detail.id, detail.mediaType, season, episode, isBackend]);
+  }, [detail.id, detail.mediaType, season, episode]);
 
   const metaLine = detailMetaLine(detail);
   const playUrl = watchHref(detail, { season, episode });
 
-  const openCinesrcFullscreen = () => {
-    // No src change — the iframe has been preloading silently; just reveal it.
-    setShowFullscreen(true);
-    cinesrcContainerRef.current?.requestFullscreen?.().catch(() => {});
-  };
+  const fileSizeRange = useMemo(() => {
+    if (!sources || sources.length === 0) return null;
+    const sizes = sources.map((s) => s.size).filter(Boolean);
+    if (sizes.length === 0) return null;
+    if (sizes.length === 1) return sizes[0];
 
-  const closeCinesrcFullscreen = () => {
-    setShowFullscreen(false);
-    setWatchProgress(getWatchProgress(detail.mediaType, detail.id));
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-  };
+    const parseSize = (sizeStr: string) => {
+      const num = parseFloat(sizeStr);
+      if (isNaN(num)) return 0;
+      if (sizeStr.toUpperCase().includes("GB")) return num * 1024;
+      return num; // MB
+    };
+
+    const sorted = [...sources].sort((a, b) => parseSize(a.size) - parseSize(b.size));
+    const minSize = sorted[0].size;
+    const maxSize = sorted[sorted.length - 1].size;
+
+    if (minSize === maxSize) return minSize;
+    return `${minSize} - ${maxSize}`;
+  }, [sources]);
 
   return (
     <>
@@ -386,6 +380,14 @@ export function MediaDetailContent({
               {detail.runtime ? (
                 <span>{runtimeLabel(detail.runtime)}</span>
               ) : null}
+              {fileSizeRange ? (
+                <>
+                  <span>·</span>
+                  <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-[11px] font-bold text-blue-400 border border-blue-500/30">
+                    {fileSizeRange}
+                  </span>
+                </>
+              ) : null}
             </div>
 
             <p className='text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal max-w-xl mb-3'>
@@ -401,61 +403,42 @@ export function MediaDetailContent({
 
           {/* Action buttons */}
           <div className='detail-action-row mt-3 flex flex-wrap items-center gap-3 z-20'>
-            {isBackend ? (
-              // Backend: check HLS source availability via API, then navigate to watch page
-              sourceStatus === "loading" ? (
-                <button
-                  disabled
-                  className='flex items-center gap-3 bg-white/70 text-black/70 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl backdrop-blur-sm'
-                  type='button'
-                >
-                  <div className='w-7 h-7 rounded-full bg-black/80 flex items-center justify-center text-white shrink-0 animate-spin'>
-                    <Loader2 className='size-3.5' />
-                  </div>
-                  <div className='flex flex-col text-left'>
-                    <span className='text-sm font-black leading-none'>Checking source...</span>
-                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
-                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
-                    </span>
-                  </div>
-                </button>
-              ) : sourceStatus === "unavailable" ? (
-                <button
-                  disabled
-                  className='flex items-center gap-3 bg-white/20 text-white/50 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl border border-white/10'
-                  type='button'
-                >
-                  <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/40 shrink-0'>
-                    <AlertCircle className='size-3.5' />
-                  </div>
-                  <div className='flex flex-col text-left'>
-                    <span className='text-sm font-black leading-none'>Source Unavailable</span>
-                    <span className='text-[10px] font-bold text-white/40 uppercase tracking-wider mt-0.5'>
-                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
-                    </span>
-                  </div>
-                </button>
-              ) : (
-                <Link
-                  className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl'
-                  href={playUrl}
-                >
-                  <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
-                    <Play className='size-3.5 fill-current ml-0.5' />
-                  </div>
-                  <div className='flex flex-col text-left'>
-                    <span className='text-sm font-black leading-none'>Watch Now</span>
-                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
-                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
-                    </span>
-                  </div>
-                </Link>
-              )
-            ) : (
+            {sourceStatus === "loading" ? (
               <button
-                onClick={openCinesrcFullscreen}
-                className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl cursor-pointer'
+                disabled
+                className='flex items-center gap-3 bg-white/70 text-black/70 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl backdrop-blur-sm'
                 type='button'
+              >
+                <div className='w-7 h-7 rounded-full bg-black/80 flex items-center justify-center text-white shrink-0 animate-spin'>
+                  <Loader2 className='size-3.5' />
+                </div>
+                <div className='flex flex-col text-left'>
+                  <span className='text-sm font-black leading-none'>Checking source...</span>
+                  <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
+                    {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                  </span>
+                </div>
+              </button>
+            ) : sourceStatus === "unavailable" ? (
+              <button
+                disabled
+                className='flex items-center gap-3 bg-white/20 text-white/50 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl border border-white/10'
+                type='button'
+              >
+                <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/40 shrink-0'>
+                  <AlertCircle className='size-3.5' />
+                </div>
+                <div className='flex flex-col text-left'>
+                  <span className='text-sm font-black leading-none'>Source Unavailable</span>
+                  <span className='text-[10px] font-bold text-white/40 uppercase tracking-wider mt-0.5'>
+                    {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                  </span>
+                </div>
+              </button>
+            ) : (
+              <Link
+                className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl'
+                href={playUrl}
               >
                 <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
                   <Play className='size-3.5 fill-current ml-0.5' />
@@ -466,6 +449,24 @@ export function MediaDetailContent({
                   </span>
                   <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
                     {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                  </span>
+                </div>
+              </Link>
+            )}
+
+            {sources.length > 0 && (
+              <button
+                onClick={() => setDownloadModalOpen(true)}
+                className='group relative flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl border border-white/10'
+                type='button'
+              >
+                <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
+                  <Download className='size-3.5' />
+                </div>
+                <div className='flex flex-col text-left'>
+                  <span className='text-sm font-black leading-none'>Download</span>
+                  <span className='text-[10px] font-bold text-white/55 uppercase tracking-wider mt-0.5'>
+                    {sources.length} links
                   </span>
                 </div>
               </button>
@@ -578,21 +579,47 @@ export function MediaDetailContent({
       </section>
     </div>
 
-    {/* CineSrc player container — mounted when showFullscreen is true */}
-    {!isBackend && showFullscreen && (
-      <div
-        ref={cinesrcContainerRef}
-        onClick={(e) => e.stopPropagation()}
-        className="fixed inset-0 bg-black z-[9999] pointer-events-auto"
-      >
-        <IframePlayer
-          mediaType={detail.mediaType}
-          mediaId={detail.id}
-          season={season}
-          episode={episode}
-          item={detail}
-          onClose={closeCinesrcFullscreen}
-        />
+    {downloadModalOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4" onClick={() => setDownloadModalOpen(false)}>
+        <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#121214] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setDownloadModalOpen(false)}
+            className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"
+          >
+            <X className="size-5" />
+          </button>
+          <h3 className="text-xl font-bold text-white mb-2">Download Options</h3>
+          <p className="text-sm text-white/60 mb-6 font-medium">Select a quality to download the media file directly.</p>
+          
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-1 no-scrollbar">
+            {sources.map((source, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all"
+              >
+                <div className="min-w-0 pr-2">
+                  <div className="font-bold text-white text-base truncate">{source.quality || "Unknown Quality"}</div>
+                  <div className="text-xs text-white/40 mt-1 uppercase tracking-wider font-semibold">{source.type || "mp4"} · {source.size || "Unknown Size"}</div>
+                </div>
+                <a
+                  href={source.url}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-all shrink-0 hover:scale-105"
+                >
+                  <Download className="size-4" />
+                  <span>Download</span>
+                </a>
+              </div>
+            ))}
+            {sources.length === 0 && (
+              <div className="text-center py-6 text-white/40 text-sm">
+                No download links available.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     )}
 
