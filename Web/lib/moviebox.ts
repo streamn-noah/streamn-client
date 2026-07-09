@@ -77,12 +77,13 @@ export async function getMovieBoxStreams(
     const queryEpisode = type === "movie" ? 0 : episode;
 
     const streamRes = await fetch(
-      `${WORKER_URL}/stream/${match.subjectId}?se=${querySeason}&ep=${queryEpisode}`,
+      `${WORKER_URL}/stream/${match.subjectId}?se=${querySeason}&ep=${queryEpisode}&_nocache=${Date.now()}`,
       {
         method: "GET",
         headers: {
           "X-Worker-Secret": WORKER_SECRET,
         },
+        cache: "no-store",
       }
     );
 

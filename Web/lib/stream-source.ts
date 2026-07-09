@@ -37,9 +37,10 @@ export type StreamBackendResponse = {
   }>;
 };
 
-// In-memory cache for stream responses to optimize modal -> watch transition
+// Short TTL — MovieBox signed URLs expire quickly. 90s is enough to cover
+// the detail modal → watch page navigation without a double-fetch.
 const sourceCache = new Map<string, { data: StreamBackendResponse; timestamp: number }>();
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 90 * 1000; // 90 seconds
 
 function getCacheKey(type: "movie" | "tv", id: number, season = 1, episode = 1): string {
   return type === "movie" ? `movie:${id}` : `tv:${id}:${season}:${episode}`;

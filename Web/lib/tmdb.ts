@@ -125,17 +125,27 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
 
   if (!bearer && key) url.searchParams.set("api_key", key);
 
-  const response = await fetch(url, {
-    headers: bearer ? { Authorization: `Bearer ${bearer}` } : undefined,
-    next: { revalidate: 3600 },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`TMDB request failed (${response.status}): ${body}`);
+  try {
+    const response = await fetch(url, {
+      headers: bearer ? { Authorization: `Bearer ${bearer}` } : undefined,
+      next: { revalidate: 3600 },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`TMDB request failed (${response.status}): ${body}`);
+    }
+
+    return (await response.json()) as T;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
   }
-
-  return (await response.json()) as T;
 }
 
 function normalizeMedia(item: TmdbMedia, forcedType?: MediaType): MediaSummary | null {

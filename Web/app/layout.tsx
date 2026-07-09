@@ -1,19 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ServiceWorkerRegister } from "@/components/providers/sw-register";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Mock Geist fonts to bypass Turbopack's Windows font compilation bug
+const geistSans = { variable: "font-sans" };
+const geistMono = { variable: "font-mono" };
 
 const satoshi = localFont({
   src: [

@@ -11,9 +11,9 @@ import {
   useRoomContext,
 } from "@livekit/components-react";
 import { Track, ConnectionState, RoomEvent } from "livekit-client";
-import { IframePlayer, type IframePlayerHandle } from "./iframe-player";
+import { CustomPlayer, type CustomPlayerHandle } from "./custom-player";
 import type { MediaDetail } from "@/lib/media";
-import { Mic, MicOff, Volume2, Users, Crown, Pin } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, Users, Crown, Pin, UserPlus, UserMinus, X } from "lucide-react";
 
 export function WatchPartyPlayer({
   item,
@@ -37,7 +37,7 @@ export function WatchPartyPlayer({
   onLeave: () => void;
 }) {
   const room = useRoomContext();
-  const playerRef = useRef<IframePlayerHandle>(null);
+  const playerRef = useRef<CustomPlayerHandle>(null);
   const participants = useParticipants();
   const audioTracks = useTracks([Track.Source.Microphone]);
   const { localParticipant } = useLocalParticipant();
@@ -48,7 +48,9 @@ export function WatchPartyPlayer({
   );
 
   const [micEnabled, setMicEnabled] = useState(true);
-  const [voiceVolume, setVoiceVolume] = useState(1);
+  const [voiceVolume, setVolume] = useState(1);
+  const [showDashboard, setShowDashboard] = useState(true);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Auto-hiding overlay state
   const [showOverlay, setShowOverlay] = useState(true);
@@ -277,11 +279,23 @@ export function WatchPartyPlayer({
     }
   }, [canControl, isEffectiveHost, localIdentity, broadcastHostSync, requestHostSync, sendData]);
 
+  const handleKickParticipant = (targetIdentity: string) => {
+    if (!isEffectiveHost) return;
+    sendData({
+      type: "kick_participant",
+      targetIdentity,
+    }, true);
+  };
+
+  const getQualityColor = (quality?: string) => {
+    const q = String(quality || "").toLowerCase();
+    if (q === "excellent" || q === "good") return "bg-green-500";
+    if (q === "poor") return "bg-yellow-500";
+    return "bg-red-500"; // lost, unknown, bad
+  };
+
   return (
-    <div 
-      className="relative w-full h-screen bg-black overflow-hidden"
-      onMouseMove={triggerOverlayVisibility}
-    >
+    <div className="flex flex-col h-screen bg-[#08080a] text-white overflow-hidden select-none">
       {/* Remote Audio Tracks with volume control (Skip local participant to prevent SDK volume warnings) */}
       {audioTracks
         .filter(isTrackReference)
@@ -294,151 +308,154 @@ export function WatchPartyPlayer({
           />
         ))}
 
-      <IframePlayer
-        ref={playerRef}
-        item={item}
-        mediaType={mediaType}
-        mediaId={mediaId}
-        season={season}
-        episode={episode}
-        hideNativeControls={true}
-        onClose={onLeave}
-        onVideoEvent={handleVideoEvent}
-      />
-
-      {/* Mic & Party Toggle Buttons in Floating Top Bar */}
-      <div 
-        className={`absolute top-6 left-6 z-40 flex items-center gap-3 transition-opacity duration-300 ${
-          showOverlay ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
-      >
-        <button
-          onClick={toggleMic}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs backdrop-blur-xl border transition-all cursor-pointer shadow-lg ${
-            micEnabled
-              ? "bg-black/60 text-white border-white/20 hover:bg-black/80"
-              : "bg-red-500/80 text-white border-red-500 hover:bg-red-600"
-          }`}
-        >
-          {micEnabled ? <Mic className="size-4" /> : <MicOff className="size-4" />}
-          <span>{micEnabled ? "Mic On" : "Muted"}</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setIsOverlayPinned((prev) => !prev);
-            setShowOverlay(true);
-          }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs backdrop-blur-xl border transition-all cursor-pointer shadow-lg ${
-            isOverlayPinned
-              ? "bg-indigo-500/80 text-white border-indigo-400"
-              : "bg-black/60 text-white/80 border-white/20 hover:bg-black/80 hover:text-white"
-          }`}
-          title={isOverlayPinned ? "Unpin Voice Overlay" : "Pin Voice Overlay"}
-        >
-          <Users className="size-4" />
-          <span>{participants.length} Online</span>
-          {isOverlayPinned && <Pin className="size-3 fill-current ml-0.5" />}
-        </button>
+      {/* Video Player Section */}
+      <div className="flex-1 relative w-full h-0 min-h-0 bg-black">
+        <CustomPlayer
+          ref={playerRef}
+          item={item}
+          mediaType={mediaType}
+          mediaId={mediaId}
+          season={season}
+          episode={episode}
+          isWatchParty={true}
+          onWatchPartyToggle={() => setShowDashboard(!showDashboard)}
+          showWatchPartyActive={showDashboard}
+          onVideoEvent={handleVideoEvent}
+        />
       </div>
 
-      {/* Voice Call Overlay (Auto-hides on idle, stays open when hovered or pinned) */}
-      <div 
-        onMouseEnter={() => { isHoveringOverlayRef.current = true; }}
-        onMouseLeave={() => {
-          isHoveringOverlayRef.current = false;
-          triggerOverlayVisibility();
-        }}
-        className={`absolute bottom-24 right-6 w-72 max-h-[60vh] overflow-y-auto bg-black/60 backdrop-blur-2xl border border-white/10 rounded-3xl p-4 shadow-2xl transition-all duration-500 z-40 ${
-          showOverlay ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-10 pointer-events-none"
-        }`}
-      >
-        <div className="flex items-center justify-between mb-4 px-2">
-          <div className="flex items-center gap-2 text-white/80 text-sm font-bold">
-            <Users className="size-4" />
-            Watch Party
-          </div>
+      {/* Compact Bottom Watch Party Bar */}
+      {showDashboard && (
+        <div className="h-16 shrink-0 bg-black border-t border-white/10 px-6 flex items-center justify-between z-40">
+          
+          {/* Left/Center: Avatars & Invite button in a natural progression */}
+          <div className="flex items-center gap-3">
+            {participants.map((p) => {
+              const displayName = p.name || p.identity || "Guest";
+              const isParticipantHost = activeHostIdentity ? p.identity === activeHostIdentity : p.isLocal && initialIsHost;
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsOverlayPinned((prev) => !prev)}
-              className={`p-1 rounded-full transition ${isOverlayPinned ? "text-indigo-400" : "text-white/40 hover:text-white"}`}
-              title={isOverlayPinned ? "Pinned (Always Visible)" : "Click to Pin"}
-            >
-              <Pin className="size-3.5" />
-            </button>
-            <button
-              onClick={toggleMic}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                micEnabled
-                  ? "bg-white/10 text-white hover:bg-white/20"
-                  : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-              }`}
-            >
-              {micEnabled ? <Mic className="size-3" /> : <MicOff className="size-3" />}
-              <span>{micEnabled ? "Mic On" : "Muted"}</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-2.5">
-          {participants.map((p) => {
-            const displayName = p.name || p.identity || "Guest";
-            const isParticipantHost = activeHostIdentity ? p.identity === activeHostIdentity : p.isLocal && initialIsHost;
-
-            return (
-              <div key={p.sid} className="flex items-center justify-between bg-white/5 rounded-2xl p-2.5 border border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className={`relative flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white text-xs font-bold ${p.isSpeaking ? "ring-2 ring-green-500 ring-offset-1 ring-offset-black" : ""}`}>
+              return (
+                <div
+                  key={p.sid}
+                  className="relative group/avatar"
+                >
+                  {/* Circle Avatar */}
+                  <div className={`relative flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white text-sm font-black shrink-0 ${
+                    p.isSpeaking ? "ring-2 ring-green-500 ring-offset-1 ring-offset-black" : ""
+                  }`}
+                  title={displayName}
+                  >
                     {displayName.charAt(0).toUpperCase()}
-                    <div className="absolute -bottom-1 -right-1 bg-black rounded-full p-0.5">
-                      {p.isMicrophoneEnabled ? (
-                        <Mic className="size-2.5 text-white" />
-                      ) : (
-                        <MicOff className="size-2.5 text-red-400" />
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1">
-                      <span className="text-white text-xs font-semibold truncate max-w-[90px]">
-                        {displayName}
-                      </span>
-                      {p.isLocal && <span className="text-white/40 text-[10px]">(You)</span>}
-                    </div>
+
+                    {/* Network Quality Indicator Dot */}
+                    <div 
+                      className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-black ${getQualityColor(p.connectionQuality)}`}
+                      title={`Connection Quality: ${p.connectionQuality}`}
+                    />
+
+                    {/* Host crown badge */}
                     {isParticipantHost && (
-                      <span className="text-[9px] font-bold text-indigo-400 flex items-center gap-0.5">
-                        <Crown className="size-2.5" /> Host
-                      </span>
+                      <div className="absolute -top-1 -left-1 bg-black rounded-full p-0.5 border border-white/10 text-indigo-400">
+                        <Crown className="size-3.5" />
+                      </div>
                     )}
                   </div>
-                </div>
-                <div className="flex items-center text-white">
-                  <ConnectionQualityIndicator participant={p} className="opacity-80" />
-                </div>
-              </div>
-            );
-          })}
-        </div>
 
-        {/* Voice Volume Control */}
-        <div className="mt-4 px-2 pt-3 border-t border-white/10">
-          <div className="flex items-center gap-3">
-            <Volume2 className="size-4 text-white/70" />
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={voiceVolume}
-              onChange={(e) => setVoiceVolume(parseFloat(e.target.value))}
-              className="w-full accent-white cursor-pointer"
-              title="Voice Chat Volume"
-            />
+                  {/* Compact Hover Actions: Mute local user / Kick other user */}
+                  {p.isLocal ? (
+                    <button
+                      onClick={toggleMic}
+                      className="absolute inset-0 flex items-center justify-center bg-black/75 rounded-full opacity-0 group-hover/avatar:opacity-100 transition cursor-pointer text-white"
+                      title={micEnabled ? "Mute Mic" : "Unmute Mic"}
+                    >
+                      {micEnabled ? <Mic className="size-4" /> : <MicOff className="size-4 text-red-400" />}
+                    </button>
+                  ) : (
+                    isEffectiveHost && (
+                      <button
+                        onClick={() => handleKickParticipant(p.identity)}
+                        className="absolute inset-0 flex items-center justify-center bg-red-500/80 rounded-full opacity-0 group-hover/avatar:opacity-100 transition cursor-pointer text-white"
+                        title={`Kick ${displayName}`}
+                      >
+                        <UserMinus className="size-4" />
+                      </button>
+                    )
+                  )}
+
+                  {/* Muted Mic Indicator (visible when not hovered) */}
+                  {!p.isMicrophoneEnabled && (
+                    <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 border border-white/10 text-white scale-75 pointer-events-none">
+                      <MicOff className="size-2.5" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Invite button: a natural progression next to avatars */}
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="w-10 h-10 rounded-full bg-white/10 text-white/80 hover:bg-white/20 hover:text-white flex items-center justify-center transition cursor-pointer"
+              title="Invite Friends"
+            >
+              <UserPlus className="size-4" />
+            </button>
           </div>
-          <div className="text-[10px] text-white/40 text-center mt-1">Voice Chat Volume</div>
+
+          {/* Right: Vertical Volume slider popover */}
+          <div className="relative flex items-center group/voice-vol h-full">
+            <div className="absolute bottom-full right-0 mb-2 hidden group-hover/voice-vol:flex flex-col items-center bg-[#0d0d11] border border-white/10 rounded-2xl p-3 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={voiceVolume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                style={{ writingMode: "vertical-lr", direction: "rtl" }}
+                className="h-20 cursor-pointer accent-white vertical-range"
+              />
+              <span className="text-[9px] text-white/50 font-black mt-2">{Math.round(voiceVolume * 100)}%</span>
+            </div>
+            <button
+              className="p-2 rounded-lg text-white/80 hover:text-white hover:bg-white/5 transition"
+              title="Voice Call Volume"
+            >
+              {voiceVolume === 0 ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+            </button>
+          </div>
+
         </div>
-      </div>
+      )}
+
+      {/* Invite Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="relative max-w-sm w-full bg-neutral-900 border border-white/10 rounded-2xl p-5 shadow-2xl text-white text-center">
+            <button
+              onClick={() => setShowInviteModal(false)}
+              className="absolute top-3 right-3 p-1 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition cursor-pointer"
+            >
+              <X className="size-4" />
+            </button>
+            <h3 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-3">Share Invite Link</h3>
+            <div className="flex items-center gap-2 bg-black/50 p-2.5 rounded-xl border border-white/5">
+              <span className="text-xs truncate flex-1 text-white/70 select-all font-mono">
+                {window.location.href}
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  alert("Invite link copied to clipboard!");
+                }}
+                className="bg-white text-black text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-white/90 transition cursor-pointer"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

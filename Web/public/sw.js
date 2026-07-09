@@ -41,6 +41,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Bypass service worker for video/audio requests
+  if (request.destination === "video" || request.destination === "audio") {
+    return;
+  }
+
+  // Bypass service worker for cross-origin requests except TMDB images
+  const isSameOrigin = url.origin === self.location.origin;
+  const isTMDbImage = url.hostname === "image.tmdb.org";
+  if (!isSameOrigin && !isTMDbImage) {
+    return;
+  }
+
   // API calls & dynamic routes -> Network only / fallback
   if (url.pathname.startsWith("/api/")) {
     return;

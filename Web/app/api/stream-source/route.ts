@@ -15,6 +15,7 @@ async function fetchFromBackend(url: string, timeoutMs: number) {
     const res = await fetch(url, {
       headers: { Accept: "application/json" },
       signal: controller.signal,
+      cache: "no-store",
     });
     clearTimeout(timeoutId);
     if (res.ok) {
@@ -55,14 +56,22 @@ export async function GET(request: Request) {
       );
 
       if (movieboxData && movieboxData.streams && movieboxData.streams.length > 0) {
-        const sources = movieboxData.streams.map((stream) => ({
-          url: stream.url,
-          quality: stream.quality,
-          type: stream.format || "mp4",
-          provider: { id: "moviebox", name: "MovieBox" },
-          size: stream.size,
-          duration: stream.duration,
-        }));
+        // Sort by resolution descending and pick only the best quality to avoid
+        // rapid CDN hits (multiple qualities → multiple rate-limited requests)
+        const bestStream = [...movieboxData.streams].sort(
+          (a, b) => (b.resolution || 0) - (a.resolution || 0)
+        )[0];
+
+        const sources = [
+          {
+            url: bestStream.url,
+            quality: bestStream.quality,
+            type: bestStream.format || "mp4",
+            provider: { id: "moviebox", name: "MovieBox" },
+            size: bestStream.size,
+            duration: bestStream.duration,
+          },
+        ];
 
         // Collect all subtitles/captions across streams without duplicates
         const subtitles: any[] = [];
@@ -92,7 +101,8 @@ export async function GET(request: Request) {
           {
             status: 200,
             headers: {
-              "Cache-Control": "public, max-age=300, s-maxage=600, stale-while-revalidate=1200",
+              // Never cache — signed URLs have a short expiry window
+              "Cache-Control": "no-store",
             },
           }
         );
@@ -122,7 +132,7 @@ export async function GET(request: Request) {
         {
           status: 200,
           headers: {
-            "Cache-Control": "public, max-age=300, s-maxage=600, stale-while-revalidate=1200",
+            "Cache-Control": "public, max-age=60",
           },
         }
       );
