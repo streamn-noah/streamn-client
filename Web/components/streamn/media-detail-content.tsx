@@ -109,7 +109,14 @@ function Episodes({
     setLoadingSources(true);
     setDownloadSources([]);
     try {
-      const res = await fetchStreamSources("tv", mediaId, ep.seasonNumber, ep.episodeNumber);
+      const res = await fetchStreamSources(
+        "tv",
+        mediaId,
+        ep.seasonNumber,
+        ep.episodeNumber,
+        false,
+        "download",
+      );
       if (res.sources) {
         setDownloadSources(res.sources);
       }
@@ -166,52 +173,62 @@ function Episodes({
       >
         {visibleEpisodes.map((episode) => (
           <Link
-            className='grid grid-cols-[2rem_7rem_1fr] gap-4 border-b border-white/8 p-4 transition hover:bg-white/[0.05] md:grid-cols-[2.5rem_12.5rem_1fr_8rem]'
+            className='group block border-b border-white/8 p-4 transition-colors hover:bg-white/[0.05] last:border-b-0'
             href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
             key={episode.id}
           >
-            <span className='self-center text-2xl font-bold text-white/45'>
-              {episode.episodeNumber}
-            </span>
-            <span className='relative aspect-video overflow-hidden rounded-xl bg-white/8'>
-              {episode.stillPath ? (
-                <Image
-                  src={tmdbImage(episode.stillPath, "w300")}
-                  alt=''
-                  fill
-                  sizes='200px'
-                  className='object-cover'
-                />
-              ) : null}
-            </span>
-            <span className='min-w-0'>
-              <span className='block truncate text-base font-bold text-white'>
-                {episode.name}
-              </span>
-              <span className='mt-1 block text-sm text-white/45'>
-                {episode.airDate}
-              </span>
-              <span className='mt-2 line-clamp-2 text-sm leading-6 text-white/55'>
-                {episode.overview}
-              </span>
-            </span>
+            <div className='flex flex-col gap-3 md:flex-row md:items-center md:gap-5'>
+              <div className='flex min-w-0 flex-1 items-start gap-4 md:items-center'>
+                <span className='flex size-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg font-black text-white/55'>
+                  {episode.episodeNumber}
+                </span>
 
-            {/* Runtime and Download Action side-by-side */}
-            <div className="flex items-center gap-3 justify-end self-center">
-              <span className='hidden text-sm font-semibold text-white/55 md:block'>
-                {runtimeLabel(episode.runtime)}
-              </span>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDownloadClick(episode);
-                }}
-                className="p-2 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition cursor-pointer"
-                title="Download Episode"
-              >
-                <Download className="size-4" />
-              </button>
+                <span className='relative aspect-video w-24 shrink-0 overflow-hidden rounded-xl bg-white/8 md:w-44'>
+                  {episode.stillPath ? (
+                    <Image
+                      src={tmdbImage(episode.stillPath, "w300")}
+                      alt=''
+                      fill
+                      sizes='(max-width: 768px) 96px, 176px'
+                      className='object-cover transition-transform duration-300 group-hover:scale-[1.03]'
+                    />
+                  ) : (
+                    <span className='flex h-full w-full items-center justify-center bg-white/[0.02] text-white/25'>
+                      <Film className='size-5' />
+                    </span>
+                  )}
+                </span>
+
+                <span className='min-w-0 flex-1'>
+                  <span className='block truncate text-base font-bold text-white'>
+                    {episode.name}
+                  </span>
+                  <span className='mt-1 block text-sm text-white/45'>
+                    {episode.airDate}
+                  </span>
+                  <span className='mt-2 line-clamp-3 text-sm leading-6 text-white/55'>
+                    {episode.overview || "No episode description available."}
+                  </span>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pl-[3.75rem] md:justify-end md:pl-0">
+                <span className='text-sm font-semibold text-white/55'>
+                  {runtimeLabel(episode.runtime) || "Runtime TBA"}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDownloadClick(episode);
+                  }}
+                  className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-white/65 transition hover:bg-white/10 hover:text-white cursor-pointer"
+                  title="Download Episode"
+                >
+                  <Download className="size-4" />
+                  <span>Download</span>
+                </button>
+              </div>
             </div>
           </Link>
         ))}
@@ -382,7 +399,7 @@ export function MediaDetailContent({
     setSourceStatus("loading");
     setSources([]);
 
-    fetchStreamSources(detail.mediaType, detail.id, season, episode)
+    fetchStreamSources(detail.mediaType, detail.id, season, episode, false, "download")
       .then((res) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {

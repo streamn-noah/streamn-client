@@ -11,6 +11,8 @@ type WatchPlayerProps = {
   season: number;
   episode: number;
   item: MediaSummary;
+  recommendations?: MediaSummary[];
+  runtimeMinutes?: number | null;
 };
 
 export function WatchPlayer({
@@ -19,6 +21,8 @@ export function WatchPlayer({
   season,
   episode,
   item,
+  recommendations = [],
+  runtimeMinutes = null,
 }: WatchPlayerProps) {
   // Read default provider from NEXT_PUBLIC_STREAM_PROVIDER env, defaulting to "cinesrc"
   const defaultEnvProvider = (process.env.NEXT_PUBLIC_STREAM_PROVIDER as StreamProviderType) || "cinesrc";
@@ -38,6 +42,8 @@ export function WatchPlayer({
           mediaId={mediaId}
           mediaType={mediaType}
           nextHref={nextHref}
+          recommendations={recommendations}
+          runtimeMinutes={runtimeMinutes}
           season={season}
         />
       ) : (

@@ -13,12 +13,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const data = await getMovieBoxStreams(
+    const data = await getMovieBoxStreams({
       title,
       type,
-      isNaN(season) ? 1 : season,
-      isNaN(episode) ? 1 : episode
-    );
+      season: isNaN(season) ? 1 : season,
+      episode: isNaN(episode) ? 1 : episode,
+    });
 
     if (!data) {
       return NextResponse.json({ error: "No stream sources found on MovieBox" }, { status: 404 });

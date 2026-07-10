@@ -9,6 +9,7 @@ import {
   Captions,
   Check,
   ChevronRight,
+  Download,
   Loader2,
   Maximize,
   Minimize,
@@ -36,7 +37,7 @@ import {
   type StreamBackendResponse,
   type SubtitleItem,
 } from "@/lib/stream-source";
-import { commitWatchSession, getWatchProgress } from "@/lib/streamn-storage";
+import { commitWatchSession, getWatchProgress, watchHref } from "@/lib/streamn-storage";
 import { syncWatchSession } from "@/lib/user-actions";
 
 export type CustomPlayerHandle = {
@@ -53,6 +54,8 @@ type CustomPlayerProps = {
   episode: number;
   item: MediaSummary;
   nextHref?: string | null;
+  recommendations?: MediaSummary[];
+  runtimeMinutes?: number | null;
   isWatchParty?: boolean;
   onWatchPartyToggle?: () => void;
   showWatchPartyActive?: boolean;
@@ -61,6 +64,20 @@ type CustomPlayerProps = {
 
 // VTT Parser & Subtitle Cue Utility
 type VTTCue = { start: number; end: number; text: string };
+type IntroDbSegment = {
+  startMs: number;
+  endMs: number | null;
+  durationMs: number | null;
+  startsAtBeginning: boolean;
+  endsAtMediaEnd: boolean;
+};
+
+type IntroDbMediaRecord = {
+  intro: IntroDbSegment[];
+  recap: IntroDbSegment[];
+  credits: IntroDbSegment[];
+  preview: IntroDbSegment[];
+};
 
 function parseVTTTime(timeStr: string): number {
   const parts = timeStr.split(":");
@@ -167,6 +184,63 @@ function formatTime(seconds: number): string {
   return `${pad(m)}:${pad(s)}`;
 }
 
+function isEpisodeAired(airDate: string): boolean {
+  if (!airDate) return false;
+
+  const parts = airDate.split("-");
+  if (parts.length !== 3) return false;
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const releaseDate = new Date(
+    Number(parts[0]),
+    Number(parts[1]) - 1,
+    Number(parts[2]),
+  );
+
+  return releaseDate.getTime() <= now.getTime();
+}
+
+function filterAiredEpisodes(episodes: Episode[]): Episode[] {
+  return episodes.filter((episode) => isEpisodeAired(episode.airDate));
+}
+
+function getDownloadFileName(
+  item: MediaSummary,
+  mediaType: MediaType,
+  season: number,
+  episode: number,
+  sourceUrl: string,
+): string {
+  const safeTitle = item.title.replace(/[<>:"/\\|?*]+/g, "").trim().replace(/\s+/g, ".");
+  const extensionMatch = sourceUrl.match(/\.([a-z0-9]{2,4})(?:[?#]|$)/i);
+  const extension = extensionMatch?.[1]?.toLowerCase() ?? "mp4";
+
+  if (mediaType === "movie") {
+    return `${safeTitle || "streamn-download"}.${extension}`;
+  }
+
+  return `${safeTitle || "streamn-download"}.S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}.${extension}`;
+}
+
+function findActiveSegment(
+  segments: IntroDbSegment[],
+  currentTimeSeconds: number,
+  durationSeconds: number,
+): IntroDbSegment | null {
+  const currentTimeMs = currentTimeSeconds * 1000;
+  const fallbackEndMs =
+    durationSeconds > 0 ? Math.max(durationSeconds * 1000, currentTimeMs) : Number.POSITIVE_INFINITY;
+
+  return (
+    segments.find((segment) => {
+      const endMs = segment.endMs ?? fallbackEndMs;
+      return currentTimeMs >= segment.startMs && currentTimeMs < endMs;
+    }) ?? null
+  );
+}
+
 function getProxiedStreamUrl(rawUrl: string, type?: string): string {
   if (!rawUrl) return "";
   const cleanedUrl = rawUrl.replace(/(https?:\/\/[^/]+)\/\/+/g, "$1/");
@@ -205,6 +279,8 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       episode,
       item,
       nextHref,
+      recommendations = [],
+      runtimeMinutes = null,
       isWatchParty = false,
       onWatchPartyToggle,
       showWatchPartyActive = false,
@@ -228,6 +304,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   const [sourceIndex, setSourceIndex] = useState(0);
   const [loadingSources, setLoadingSources] = useState(true);
   const [sourceError, setSourceError] = useState<string | null>(null);
+  const [introDbSegments, setIntroDbSegments] = useState<IntroDbMediaRecord | null>(null);
 
   // Player UI State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -239,6 +316,8 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [showMovieRecommendations, setShowMovieRecommendations] = useState(false);
+  const [hasSkippedMovieCredits, setHasSkippedMovieCredits] = useState(false);
 
   // Menus
   const [activeMenu, setActiveMenu] = useState<
@@ -276,6 +355,50 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   const [selectedSeasonForEpisodes, setSelectedSeasonForEpisodes] = useState<number>(season);
   const [episodesMap, setEpisodesMap] = useState<Record<number, Episode[]>>({});
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+  const [showEpisodesPopover, setShowEpisodesPopover] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setIntroDbSegments(null);
+    setShowMovieRecommendations(false);
+    setHasSkippedMovieCredits(false);
+
+    const params = new URLSearchParams({
+      tmdbId: String(mediaId),
+    });
+
+    if (mediaType === "tv") {
+      params.set("season", String(season));
+      params.set("episode", String(episode));
+    } else if (runtimeMinutes && runtimeMinutes > 0) {
+      params.set("durationMs", String(runtimeMinutes * 60 * 1000));
+    }
+
+    fetch(`/api/introdb?${params.toString()}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          if (res.status !== 404) {
+            const payload = await res.json().catch(() => null);
+            console.warn("Failed to load IntroDB segments:", payload?.error || res.statusText);
+          }
+          return null;
+        }
+
+        return res.json() as Promise<IntroDbMediaRecord>;
+      })
+      .then((data) => {
+        if (active) {
+          setIntroDbSegments(data);
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to fetch IntroDB segments:", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [episode, mediaId, mediaType, runtimeMinutes, season]);
 
   const fetchEpisodesForSeason = useCallback(async (sNum: number) => {
     if (episodesMap[sNum]) return; // already cached
@@ -284,7 +407,10 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       const res = await fetch(`/api/season?tvId=${mediaId}&season=${sNum}`);
       const data = await res.json();
       if (data.episodes) {
-        setEpisodesMap((prev) => ({ ...prev, [sNum]: data.episodes }));
+        setEpisodesMap((prev) => ({
+          ...prev,
+          [sNum]: filterAiredEpisodes(data.episodes),
+        }));
       }
     } catch (err) {
       console.error("Failed to fetch episodes:", err);
@@ -747,15 +873,95 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   };
 
   const currentSourceInfo = streamData?.sources[sourceIndex];
+  const downloadSource = useMemo(() => {
+    const sources = streamData?.sources ?? [];
+    if (!sources.length) return null;
+
+    const directSource = sources.find((source) => {
+      const type = source.type?.toLowerCase() ?? "";
+      const url = source.url.toLowerCase();
+      return type !== "hls" && type !== "m3u8" && !url.includes(".m3u8");
+    });
+
+    return directSource ?? currentSourceInfo ?? sources[0];
+  }, [currentSourceInfo, streamData?.sources]);
+  const activeIntroSegment = useMemo(
+    () => findActiveSegment(introDbSegments?.intro ?? [], currentTime, duration),
+    [currentTime, duration, introDbSegments?.intro],
+  );
+  const activeCreditsSegment = useMemo(
+    () => findActiveSegment(introDbSegments?.credits ?? [], currentTime, duration),
+    [currentTime, duration, introDbSegments?.credits],
+  );
+  const movieRecommendations = useMemo(
+    () => recommendations.filter((recommendation) => recommendation.mediaType === "movie").slice(0, 8),
+    [recommendations],
+  );
   const rawSubUrl = selectedSubtitle >= 0 ? vttTracks[selectedSubtitle]?.url : null;
   const activeSubtitleUrl = rawSubUrl ? getProxiedSubtitleUrl(rawSubUrl) : null;
+
+  const handleDownload = useCallback(() => {
+    if (!downloadSource || typeof document === "undefined") return;
+
+    const link = document.createElement("a");
+    link.href = downloadSource.url;
+    link.download = getDownloadFileName(
+      item,
+      mediaType,
+      season,
+      episode,
+      downloadSource.url,
+    );
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [downloadSource, episode, item, mediaType, season]);
+
+  const handleSkipIntro = useCallback(() => {
+    if (!activeIntroSegment?.endMs || !videoRef.current) return;
+
+    const nextTime = activeIntroSegment.endMs / 1000;
+    videoRef.current.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  }, [activeIntroSegment]);
+
+  const handleCreditsAction = useCallback(() => {
+    if (mediaType === "tv" && nextHref) {
+      router.push(nextHref);
+      return;
+    }
+
+    if (mediaType !== "movie" || !videoRef.current || !activeCreditsSegment) return;
+
+    const resolvedEndTime =
+      activeCreditsSegment.endMs != null
+        ? activeCreditsSegment.endMs / 1000
+        : Math.max(duration - 0.5, currentTime);
+
+    videoRef.current.currentTime = resolvedEndTime;
+    videoRef.current.pause();
+    setCurrentTime(resolvedEndTime);
+    setHasSkippedMovieCredits(true);
+    setShowMovieRecommendations(true);
+  }, [activeCreditsSegment, currentTime, duration, mediaType, nextHref, router]);
+
+  const showSkipIntroCta = Boolean(activeIntroSegment?.endMs) && !showMovieRecommendations;
+  const showCreditsCta =
+    Boolean(activeCreditsSegment) &&
+    !showMovieRecommendations &&
+    (mediaType === "movie" ? !hasSkippedMovieCredits : Boolean(nextHref));
 
   return (
     <div
       ref={containerRef}
       className="relative w-full h-full bg-black overflow-hidden select-none font-sans group"
       onMouseMove={triggerControls}
-      onClick={() => setActiveMenu(null)}
+      onClick={() => {
+        setActiveMenu(null);
+        setShowEpisodesPopover(false);
+      }}
     >
       {/* Video Element — loaded in no-cors mode (no crossOrigin attr) so CDN
           hotlink protection doesn't block playback. */}
@@ -819,6 +1025,98 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         </div>
       )}
 
+      {(showSkipIntroCta || showCreditsCta) && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-24 z-40 flex justify-end px-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (showSkipIntroCta) {
+                handleSkipIntro();
+              } else {
+                handleCreditsAction();
+              }
+            }}
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/80 px-5 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur-md transition hover:bg-black/90 cursor-pointer"
+          >
+            <span>
+              {showSkipIntroCta
+                ? "Skip Intro"
+                : mediaType === "tv"
+                  ? "Next Episode"
+                  : "Skip Credits"}
+            </span>
+            {showCreditsCta && mediaType === "tv" ? (
+              <ChevronRight className="size-4" />
+            ) : null}
+          </button>
+        </div>
+      )}
+
+      {showMovieRecommendations && mediaType === "movie" && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          onClick={() => setShowMovieRecommendations(false)}
+        >
+          <div
+            className="relative w-full max-w-5xl rounded-3xl border border-white/10 bg-neutral-950/95 p-6 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowMovieRecommendations(false)}
+              className="absolute right-4 top-4 rounded-full p-2 text-white/60 transition hover:bg-white/10 hover:text-white cursor-pointer"
+              title="Close"
+            >
+              <X className="size-5" />
+            </button>
+
+            <div className="mb-6 pr-10">
+              <h2 className="text-2xl font-black tracking-tight">Similar movies to watch</h2>
+              <p className="mt-1 text-sm text-white/55">
+                Pick something with a similar vibe and keep the night going.
+              </p>
+            </div>
+
+            {movieRecommendations.length > 0 ? (
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                {movieRecommendations.map((recommendation) => (
+                  <Link
+                    key={`${recommendation.mediaType}-${recommendation.id}`}
+                    href={watchHref(recommendation)}
+                    className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition hover:border-white/25 hover:bg-white/[0.05]"
+                  >
+                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-neutral-900">
+                      {recommendation.backdropPath || recommendation.posterPath ? (
+                        <img
+                          src={tmdbImage(recommendation.backdropPath || recommendation.posterPath, "w780")}
+                          alt={recommendation.title}
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center bg-neutral-950">
+                          <Film className="size-6 text-white/20" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-1 p-3">
+                      <div className="line-clamp-1 text-sm font-bold text-white">
+                        {recommendation.title}
+                      </div>
+                      <div className="text-xs font-medium text-white/45">
+                        {recommendation.year || "Movie"}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-6 py-12 text-center text-sm text-white/50">
+                No similar movies are available right now.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Top Header Overlay */}
       <div
         className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-6 bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${
@@ -845,6 +1143,22 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
                 : `Season ${season}, Ep. ${episode}`}
             </p>
           </div>
+        </div>
+
+        <div className="flex items-center">
+          <button
+            onClick={handleDownload}
+            disabled={!downloadSource}
+            className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition ${
+              downloadSource
+                ? "border-white/15 bg-white/10 text-white/90 hover:bg-white/15 hover:text-white cursor-pointer"
+                : "border-white/10 bg-white/5 text-white/35 cursor-not-allowed"
+            }`}
+            title={downloadSource ? "Download" : "No download source available"}
+          >
+            <Download className="size-4" />
+            <span className="hidden sm:inline">Download</span>
+          </button>
         </div>
       </div>
 
@@ -1139,7 +1453,10 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
             {mediaType === "tv" && (
               <div className="relative group/episodes flex items-center h-full">
                 {/* Popover */}
-                <div className="absolute bottom-full right-0 mb-0.5 hidden group-hover/episodes:flex flex-col bg-neutral-950/95 border border-white/10 rounded-2xl w-80 max-h-96 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 backdrop-blur-md p-4 gap-3 text-white">
+                <div
+                  className={`absolute bottom-full right-0 mb-0.5 ${showEpisodesPopover ? "flex" : "hidden"} md:group-hover/episodes:flex flex-col bg-neutral-950/95 border border-white/10 rounded-2xl w-80 max-h-96 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 backdrop-blur-md p-4 gap-3 text-white`}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="flex items-center justify-between border-b border-white/10 pb-2">
                     <span className="text-xs font-bold text-white/50 uppercase tracking-wider">Episodes</span>
                     {seasons.length > 0 && (
@@ -1174,6 +1491,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
                             key={ep.id}
                             onClick={(e) => {
                               e.stopPropagation();
+                              setShowEpisodesPopover(false);
                               const nextUrl = `/watch/tv/${mediaId}?s=${ep.seasonNumber}&e=${ep.episodeNumber}`;
                               router.push(nextUrl);
                             }}
@@ -1221,9 +1539,15 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
 
                 {/* Episode Button with ListVideo Icon */}
                 <button
-                  className="text-white/90 hover:text-white transition hover:scale-110 cursor-pointer p-1 rounded-md"
+                  className={`transition hover:scale-110 cursor-pointer p-1 rounded-md ${
+                    showEpisodesPopover ? "text-white bg-white/20" : "text-white/90 hover:text-white"
+                  }`}
                   title="Episodes"
-                  onClick={(e) => e.stopPropagation()}
+                  aria-expanded={showEpisodesPopover}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowEpisodesPopover((prev) => !prev);
+                  }}
                 >
                   <ListVideo className="size-6" />
                 </button>

@@ -463,7 +463,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     const season = bannerProgress?.seasonNumber ?? 1;
     const episode = bannerProgress?.episodeNumber ?? 1;
 
-    fetchStreamSources(activeBanner.mediaType, activeBanner.id, season, episode)
+    fetchStreamSources(activeBanner.mediaType, activeBanner.id, season, episode, false, "download")
       .then((res) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {

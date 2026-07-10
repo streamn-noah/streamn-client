@@ -37,13 +37,23 @@ export type StreamBackendResponse = {
   }>;
 };
 
+export type StreamSourceMode = "playback" | "download";
+
 // Short TTL — MovieBox signed URLs expire quickly. 90s is enough to cover
 // the detail modal → watch page navigation without a double-fetch.
 const sourceCache = new Map<string, { data: StreamBackendResponse; timestamp: number }>();
 const CACHE_TTL_MS = 90 * 1000; // 90 seconds
 
-function getCacheKey(type: "movie" | "tv", id: number, season = 1, episode = 1): string {
-  return type === "movie" ? `movie:${id}` : `tv:${id}:${season}:${episode}`;
+function getCacheKey(
+  type: "movie" | "tv",
+  id: number,
+  season = 1,
+  episode = 1,
+  mode: StreamSourceMode = "playback",
+): string {
+  return type === "movie"
+    ? `movie:${id}:${mode}`
+    : `tv:${id}:${season}:${episode}:${mode}`;
 }
 
 export async function fetchStreamSources(
@@ -51,9 +61,10 @@ export async function fetchStreamSources(
   id: number,
   season = 1,
   episode = 1,
-  ignoreCache = false
+  ignoreCache = false,
+  mode: StreamSourceMode = "playback",
 ): Promise<StreamBackendResponse> {
-  const key = getCacheKey(type, id, season, episode);
+  const key = getCacheKey(type, id, season, episode, mode);
 
   if (!ignoreCache) {
     const cached = sourceCache.get(key);
@@ -67,6 +78,7 @@ export async function fetchStreamSources(
     id: String(id),
     season: String(season),
     episode: String(episode),
+    mode,
   });
 
   const endpoint = `/api/stream-source?${queryParams.toString()}`;
@@ -103,9 +115,10 @@ export function getCachedStreamSources(
   type: "movie" | "tv",
   id: number,
   season = 1,
-  episode = 1
+  episode = 1,
+  mode: StreamSourceMode = "playback",
 ): StreamBackendResponse | null {
-  const key = getCacheKey(type, id, season, episode);
+  const key = getCacheKey(type, id, season, episode, mode);
   const cached = sourceCache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;

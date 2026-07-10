@@ -65,6 +65,8 @@ export default async function WatchPage({
           item={item}
           mediaId={numericId}
           mediaType={type}
+          recommendations={detail?.recommendations ?? []}
+          runtimeMinutes={detail?.runtime ?? null}
           season={season}
         />
       ) : (

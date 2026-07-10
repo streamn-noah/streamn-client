@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMovieBoxStreams } from "@/lib/moviebox";
+import { getMovieBoxDownloadSources, getMovieBoxStreams } from "@/lib/moviebox";
 import { getMediaDetail } from "@/lib/tmdb";
 
 const BACKEND_URLS = [
@@ -33,6 +33,7 @@ export async function GET(request: Request) {
   const id = searchParams.get("id");
   const season = searchParams.get("season") ?? "1";
   const episode = searchParams.get("episode") ?? "1";
+  const mode = searchParams.get("mode") === "download" ? "download" : "playback";
 
   if (!id || isNaN(Number(id))) {
     return NextResponse.json(
@@ -46,37 +47,46 @@ export async function GET(request: Request) {
     // Resolve the media title from TMDB so MovieBox can search by keyword
     const detail = await getMediaDetail(type as "movie" | "tv", Number(id));
     const mediaTitle = detail?.title;
+    const mediaYear = detail?.year;
 
     if (mediaTitle) {
-      const movieboxData = await getMovieBoxStreams(
-        mediaTitle,
-        type as "movie" | "tv",
-        Number(season),
-        Number(episode)
-      );
+      const movieboxData =
+        mode === "download"
+          ? await getMovieBoxDownloadSources({
+              title: mediaTitle,
+              type: type as "movie" | "tv",
+              year: mediaYear,
+              season: Number(season),
+              episode: Number(episode),
+            })
+          : await getMovieBoxStreams({
+              title: mediaTitle,
+              type: type as "movie" | "tv",
+              year: mediaYear,
+              season: Number(season),
+              episode: Number(episode),
+            });
 
       if (movieboxData && movieboxData.streams && movieboxData.streams.length > 0) {
-        // Sort by resolution descending and pick only the best quality to avoid
-        // rapid CDN hits (multiple qualities → multiple rate-limited requests)
-        const bestStream = [...movieboxData.streams].sort(
+        const sortedStreams = [...movieboxData.streams].sort(
           (a, b) => (b.resolution || 0) - (a.resolution || 0)
-        )[0];
+        );
+        const selectedStreams =
+          mode === "download" ? sortedStreams : sortedStreams.slice(0, 1);
 
-        const sources = [
-          {
-            url: bestStream.url,
-            quality: bestStream.quality,
-            type: bestStream.format || "mp4",
-            provider: { id: "moviebox", name: "MovieBox" },
-            size: bestStream.size,
-            duration: bestStream.duration,
-          },
-        ];
+        const sources = selectedStreams.map((stream) => ({
+          url: stream.url,
+          quality: stream.quality,
+          type: stream.format || "mp4",
+          provider: { id: "moviebox", name: "MovieBox" },
+          size: stream.size,
+          duration: stream.duration,
+        }));
 
         // Collect all subtitles/captions across streams without duplicates
-        const subtitles: any[] = [];
+        const subtitles: Array<{ url: string; format: string; label: string }> = [];
         const seenSubUrls = new Set<string>();
-        for (const stream of movieboxData.streams) {
+        for (const stream of sortedStreams) {
           if (Array.isArray(stream.captions)) {
             for (const cap of stream.captions) {
               if (cap.url && !seenSubUrls.has(cap.url)) {
@@ -90,6 +100,12 @@ export async function GET(request: Request) {
             }
           }
         }
+
+        subtitles.sort((a, b) => {
+          const aEnglish = /english|eng/i.test(a.label);
+          const bEnglish = /english|eng/i.test(b.label);
+          return Number(bEnglish) - Number(aEnglish);
+        });
 
         return NextResponse.json(
           {
