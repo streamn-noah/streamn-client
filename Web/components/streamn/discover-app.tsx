@@ -569,9 +569,9 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     const allGenres = [...data.movieGenres, ...data.tvGenres];
     const genreNames = item.genreIds
       ? item.genreIds
-          .map((id) => allGenres.find((g) => g.id === id)?.name)
-          .filter(Boolean)
-          .slice(0, 2)
+        .map((id) => allGenres.find((g) => g.id === id)?.name)
+        .filter(Boolean)
+        .slice(0, 2)
       : [];
 
     const rating = item.voteAverage ? item.voteAverage.toFixed(1) : "6.5";
@@ -579,8 +579,8 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     const genres = genreNames.length
       ? genreNames.join(" · ")
       : item.mediaType === "movie"
-      ? "Movie"
-      : "Series";
+        ? "Movie"
+        : "Series";
 
     return `★ ${rating} · ${year} · ${genres}`;
   };
@@ -796,9 +796,8 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
                 alt={activeBanner.title}
                 fill
                 priority
-                className={`object-cover object-top transition-opacity duration-700 ${
-                  videoLoaded ? "opacity-0" : "opacity-80"
-                }`}
+                className={`object-cover object-top transition-opacity duration-700 ${videoLoaded ? "opacity-0" : "opacity-80"
+                  }`}
               />
               {activeBanner.trailerKey && (
                 <iframe
@@ -806,9 +805,8 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
                   ref={iframeRef}
                   onLoad={() => setVideoLoaded(true)}
                   src={`https://www.youtube-nocookie.com/embed/${activeBanner.trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&playsinline=1`}
-                  className={`w-[170%] h-[170%] absolute top-0 left-1/2 -translate-x-1/2 object-cover pointer-events-none scale-125 min-w-full min-h-full transition-opacity duration-700 ${
-                    videoLoaded ? "opacity-100" : "opacity-0"
-                  }`}
+                  className={`absolute top-0 left-1/2 -translate-x-1/2 w-[350vw] sm:w-[200vw] md:w-[150vw] aspect-video pointer-events-none transition-opacity duration-700 ${videoLoaded ? "opacity-100" : "opacity-0"
+                    }`}
                   allow="autoplay; encrypted-media; picture-in-picture"
                   title="Backdrop Trailer"
                 />
@@ -848,7 +846,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
           </div>
 
           {/* Banner Copy Stack */}
-          <div className="absolute inset-x-6 md:left-14 md:right-auto bottom-20 z-20 max-w-xl flex flex-col items-center text-center md:items-start md:text-left mx-auto md:mx-0 gap-3.5">
+          <div className="absolute inset-x-6 md:left-14 md:right-auto bottom-24 z-20 max-w-xl flex flex-col items-center text-center md:items-start md:text-left mx-auto md:mx-0 gap-3.5">
             {activeBanner.logoPath ? (
               <Image
                 src={tmdbImage(activeBanner.logoPath, "w500")}
@@ -893,17 +891,17 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
               {bannerSources.length > 0 && (
                 <button
                   onClick={() => setBannerDownloadModalOpen(true)}
-                  className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold flex items-center gap-2 shadow-2xl transition-transform hover:scale-105 border border-white/20 shrink-0"
+                  className="w-12 h-12 md:w-auto md:h-auto rounded-full bg-black/50 hover:bg-white/20 border border-white/30 backdrop-blur-md text-white font-semibold text-xs md:text-sm transition-all flex items-center justify-center md:px-4 md:py-2 md:gap-2 shrink-0"
                   type="button"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download</span>
+                  <span className="hidden md:inline">Download</span>
                 </button>
               )}
 
               <button
                 onClick={() => openDetail(activeBanner)}
-                className="w-10 h-10 md:w-auto md:h-auto rounded-full bg-black/50 hover:bg-white/20 border border-white/30 backdrop-blur-md text-white font-semibold text-xs md:text-sm transition-all flex items-center justify-center md:px-4 md:py-2 md:gap-2 shrink-0"
+                className="w-12 h-12 md:w-auto md:h-auto rounded-full bg-black/50 hover:bg-white/20 border border-white/30 backdrop-blur-md text-white font-semibold text-xs md:text-sm transition-all flex items-center justify-center md:px-4 md:py-2 md:gap-2 shrink-0"
                 type="button"
                 aria-label="See More"
               >
@@ -941,11 +939,10 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
                   <div
                     key={`thumb-${item.mediaType}-${item.id}`}
                     onClick={() => setBannerIndex(index)}
-                    className={`relative w-20 sm:w-24 aspect-[16/9] rounded-lg overflow-hidden cursor-pointer shrink-0 transition-all duration-300 ${
-                      isActive
-                        ? "ring-2 ring-white border-2 border-white scale-105 shadow-2xl z-10"
-                        : "opacity-60 hover:opacity-100 border border-white/10"
-                    }`}
+                    className={`relative w-20 sm:w-24 aspect-[16/9] rounded-lg overflow-hidden cursor-pointer shrink-0 transition-all duration-300 ${isActive
+                      ? "ring-2 ring-white border-2 border-white scale-105 shadow-2xl z-10"
+                      : "opacity-60 hover:opacity-100 border border-white/10"
+                      }`}
                   >
                     <Image
                       src={tmdbImage(
@@ -1014,7 +1011,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
             </button>
             <h3 className="text-xl font-bold text-white mb-2">Download Options</h3>
             <p className="text-sm text-white/60 mb-6 font-medium">Select a quality to download the media file directly.</p>
-            
+
             <div className="space-y-3 max-h-80 overflow-y-auto pr-1 no-scrollbar">
               {bannerSources.map((source, index) => (
                 <div

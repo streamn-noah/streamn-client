@@ -26,7 +26,7 @@ export function WatchlistPicker({
   menuPosition?: "down" | "up";
 }) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, setAuthModalOpen } = useAuth();
   const [open, setOpen] = useState(false);
   const [lists, setLists] = useState<WatchlistRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,7 +53,7 @@ export function WatchlistPicker({
 
   function requireAuth() {
     if (!user) {
-      router.push("/auth");
+      setAuthModalOpen(true);
       return false;
     }
     return true;

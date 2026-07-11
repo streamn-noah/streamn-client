@@ -8,6 +8,7 @@ import {
   Download,
   Film,
   Loader2,
+  PartyPopper,
   Pause,
   Play,
   Star,
@@ -245,11 +246,11 @@ function Episodes({
 
       {/* Episode Download Modal */}
       {downloadModalOpen && downloadEpisode && (
-        <div 
+        <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
           onClick={() => setDownloadModalOpen(false)}
         >
-          <div 
+          <div
             className="relative max-w-md w-full bg-neutral-900 border border-white/10 rounded-2xl p-6 shadow-2xl text-white"
             onClick={(e) => e.stopPropagation()}
           >
@@ -317,7 +318,7 @@ export function MediaDetailContent({
   onSelect: (item: MediaSummary) => void;
 }) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, setAuthModalOpen } = useAuth();
   const playerRef = useRef<DetailBackdropPlayerHandle>(null);
   const [liked, setLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
@@ -368,7 +369,7 @@ export function MediaDetailContent({
 
   async function toggleLike() {
     if (!user) {
-      router.push("/auth");
+      setAuthModalOpen(true);
       return;
     }
     setLikeBusy(true);
@@ -447,320 +448,320 @@ export function MediaDetailContent({
 
   return (
     <>
-    <div className='modal-entrance max-h-[90vh] overflow-y-auto bg-black text-white'>
-      <section
-        className='relative min-h-[70vh] md:min-h-[75vh] select-none group'
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      >
-        <DetailBackdropPlayer
-          backdropPath={detail.backdropPath}
-          muted={muted}
-          onMutedChange={setMuted}
-          posterPath={detail.posterPath}
-          ref={playerRef}
-          trailerKey={detail.trailerKey}
-        />
-        <div className='detail-hero-content relative z-20 flex min-h-[70vh] md:min-h-[75vh] max-w-2xl flex-col justify-end p-6 pt-20 md:p-10'>
-          {detail.logoPath ? (
-            <Image
-              src={tmdbImage(detail.logoPath, "w500")}
-              alt={detail.title}
-              width={420}
-              height={170}
-              className='mb-3 h-auto max-h-24 md:max-h-36 w-auto max-w-[85%] object-contain object-left drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'
-            />
-          ) : (
-            <h2 className='mb-3 max-w-2xl text-4xl md:text-5xl font-black tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'>
-              {detail.title}
-            </h2>
-          )}
+      <div className='modal-entrance max-h-[90vh] overflow-y-auto bg-black text-white'>
+        <section
+          className='relative min-h-[70vh] md:min-h-[75vh] select-none group'
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <DetailBackdropPlayer
+            backdropPath={detail.backdropPath}
+            muted={muted}
+            onMutedChange={setMuted}
+            posterPath={detail.posterPath}
+            ref={playerRef}
+            trailerKey={detail.trailerKey}
+          />
+          <div className='detail-hero-content relative z-20 flex min-h-[70vh] md:min-h-[75vh] max-w-2xl flex-col justify-end p-6 pt-20 md:p-10'>
+            {detail.logoPath ? (
+              <Image
+                src={tmdbImage(detail.logoPath, "w500")}
+                alt={detail.title}
+                width={420}
+                height={170}
+                className='mb-3 h-auto max-h-24 md:max-h-36 w-auto max-w-[85%] object-contain object-left drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'
+              />
+            ) : (
+              <h2 className='mb-3 max-w-2xl text-4xl md:text-5xl font-black tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'>
+                {detail.title}
+              </h2>
+            )}
 
-          {/* Description area fading out after 4.5s and reappearing on hover */}
-          <div
-            className={`transition-all duration-700 ease-in-out ${isDescriptionVisible
+            {/* Description area fading out after 4.5s and reappearing on hover */}
+            <div
+              className={`transition-all duration-700 ease-in-out ${isDescriptionVisible
                 ? "opacity-100 max-h-96 translate-y-0 pointer-events-auto my-2"
                 : "opacity-0 max-h-0 -translate-y-2 pointer-events-none overflow-hidden my-0"
-              }`}
-          >
-            <div className='flex flex-wrap items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md mb-2'>
-              {detail.voteAverage ? (
-                <>
-                  <span className='text-white font-bold flex items-center gap-1'>
-                    <Star className='size-3.5 fill-current' />
-                    {detail.voteAverage.toFixed(1)}
-                  </span>
-                  <span>·</span>
-                </>
-              ) : null}
-              {detail.year ? (
-                <>
-                  <span>{detail.year}</span>
-                  <span>·</span>
-                </>
-              ) : null}
-              {detail.certification && detail.certification !== "NR" ? (
-                <>
-                  <span className='px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20'>
-                    {detail.certification}
-                  </span>
-                  <span>·</span>
-                </>
-              ) : null}
-              {detail.runtime ? (
-                <span>{runtimeLabel(detail.runtime)}</span>
-              ) : null}
-              {fileSizeRange ? (
-                <>
-                  <span>·</span>
-                  <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-[11px] font-bold text-blue-400 border border-blue-500/30">
-                    {fileSizeRange}
-                  </span>
-                </>
+                }`}
+            >
+              <div className='flex flex-wrap items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md mb-2'>
+                {detail.voteAverage ? (
+                  <>
+                    <span className='text-white font-bold flex items-center gap-1'>
+                      <Star className='size-3.5 fill-current' />
+                      {detail.voteAverage.toFixed(1)}
+                    </span>
+                    <span>·</span>
+                  </>
+                ) : null}
+                {detail.year ? (
+                  <>
+                    <span>{detail.year}</span>
+                    <span>·</span>
+                  </>
+                ) : null}
+                {detail.certification && detail.certification !== "NR" ? (
+                  <>
+                    <span className='px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20'>
+                      {detail.certification}
+                    </span>
+                    <span>·</span>
+                  </>
+                ) : null}
+                {detail.runtime ? (
+                  <span>{runtimeLabel(detail.runtime)}</span>
+                ) : null}
+                {fileSizeRange ? (
+                  <>
+                    <span>·</span>
+                    <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-[11px] font-bold text-blue-400 border border-blue-500/30">
+                      {fileSizeRange}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+
+              <p className='text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal max-w-xl mb-3'>
+                {detail.overview}
+              </p>
+
+              {detail.genres.length > 0 ? (
+                <div className='text-xs md:text-sm font-semibold text-white/70 tracking-wide mb-2'>
+                  {detail.genres.join(" | ")}
+                </div>
               ) : null}
             </div>
 
-            <p className='text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal max-w-xl mb-3'>
-              {detail.overview}
-            </p>
+            {/* Action buttons */}
+            <div className='detail-action-row mt-3 flex flex-wrap items-center gap-3 z-20'>
+              {sourceStatus === "loading" ? (
+                <button
+                  disabled
+                  className='flex items-center gap-3 bg-white/70 text-black/70 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl backdrop-blur-sm'
+                  type='button'
+                >
+                  <div className='w-7 h-7 rounded-full bg-black/80 flex items-center justify-center text-white shrink-0 animate-spin'>
+                    <Loader2 className='size-3.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>Checking source...</span>
+                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
+                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                    </span>
+                  </div>
+                </button>
+              ) : sourceStatus === "unavailable" ? (
+                <button
+                  disabled
+                  className='flex items-center gap-3 bg-white/20 text-white/50 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl border border-white/10'
+                  type='button'
+                >
+                  <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/40 shrink-0'>
+                    <AlertCircle className='size-3.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>Source Unavailable</span>
+                    <span className='text-[10px] font-bold text-white/40 uppercase tracking-wider mt-0.5'>
+                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                    </span>
+                  </div>
+                </button>
+              ) : (
+                <Link
+                  className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl'
+                  href={playUrl}
+                >
+                  <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
+                    <Play className='size-3.5 fill-current ml-0.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>
+                      {watchProgress ? "Continue Watching" : "Watch Now"}
+                    </span>
+                    <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
+                      {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
+                    </span>
+                  </div>
+                </Link>
+              )}
 
-            {detail.genres.length > 0 ? (
-              <div className='text-xs md:text-sm font-semibold text-white/70 tracking-wide mb-2'>
-                {detail.genres.join(" | ")}
-              </div>
-            ) : null}
-          </div>
+              {sources.length > 0 && (
+                <button
+                  onClick={() => setDownloadModalOpen(true)}
+                  className='group relative flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl border border-white/10'
+                  type='button'
+                >
+                  <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
+                    <Download className='size-3.5' />
+                  </div>
+                  <div className='flex flex-col text-left'>
+                    <span className='text-sm font-black leading-none'>Download</span>
+                    <span className='text-[10px] font-bold text-white/55 uppercase tracking-wider mt-0.5'>
+                      {sources.length} links
+                    </span>
+                  </div>
+                </button>
+              )}
 
-          {/* Action buttons */}
-          <div className='detail-action-row mt-3 flex flex-wrap items-center gap-3 z-20'>
-            {sourceStatus === "loading" ? (
+              <WatchlistPicker iconOnly item={detail} menuPosition='up' />
+
               <button
-                disabled
-                className='flex items-center gap-3 bg-white/70 text-black/70 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl backdrop-blur-sm'
+                aria-label="Create Watch Party"
+                className="w-11 h-11 rounded-full border bg-white/10 hover:bg-white/20 text-white border-white/20 flex items-center justify-center transition-all"
+                onClick={() => setIsWatchPartyModalOpen(true)}
                 type='button'
+                title="Create Watch Party"
               >
-                <div className='w-7 h-7 rounded-full bg-black/80 flex items-center justify-center text-white shrink-0 animate-spin'>
-                  <Loader2 className='size-3.5' />
-                </div>
-                <div className='flex flex-col text-left'>
-                  <span className='text-sm font-black leading-none'>Checking source...</span>
-                  <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
-                    {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
-                  </span>
-                </div>
+                <PartyPopper className="size-5" />
               </button>
-            ) : sourceStatus === "unavailable" ? (
+
               <button
-                disabled
-                className='flex items-center gap-3 bg-white/20 text-white/50 px-5 py-2.5 rounded-full font-bold cursor-not-allowed shadow-xl border border-white/10'
-                type='button'
-              >
-                <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/40 shrink-0'>
-                  <AlertCircle className='size-3.5' />
-                </div>
-                <div className='flex flex-col text-left'>
-                  <span className='text-sm font-black leading-none'>Source Unavailable</span>
-                  <span className='text-[10px] font-bold text-white/40 uppercase tracking-wider mt-0.5'>
-                    {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
-                  </span>
-                </div>
-              </button>
-            ) : (
-              <Link
-                className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl'
-                href={playUrl}
-              >
-                <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
-                  <Play className='size-3.5 fill-current ml-0.5' />
-                </div>
-                <div className='flex flex-col text-left'>
-                  <span className='text-sm font-black leading-none'>
-                    {watchProgress ? "Continue Watching" : "Watch Now"}
-                  </span>
-                  <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
-                    {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
-                  </span>
-                </div>
-              </Link>
-            )}
-
-            {sources.length > 0 && (
-              <button
-                onClick={() => setDownloadModalOpen(true)}
-                className='group relative flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl border border-white/10'
-                type='button'
-              >
-                <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
-                  <Download className='size-3.5' />
-                </div>
-                <div className='flex flex-col text-left'>
-                  <span className='text-sm font-black leading-none'>Download</span>
-                  <span className='text-[10px] font-bold text-white/55 uppercase tracking-wider mt-0.5'>
-                    {sources.length} links
-                  </span>
-                </div>
-              </button>
-            )}
-
-            <WatchlistPicker iconOnly item={detail} menuPosition='up' />
-
-            <button
-              aria-label="Create Watch Party"
-              className="w-11 h-11 rounded-full border bg-white/10 hover:bg-white/20 text-white border-white/20 flex items-center justify-center transition-all"
-              onClick={() => setIsWatchPartyModalOpen(true)}
-              type='button'
-              title="Create Watch Party"
-            >
-              <Users className="size-5" />
-            </button>
-
-            <button
-              aria-label={liked ? "Unlike" : "Like"}
-              className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all ${liked
+                aria-label={liked ? "Unlike" : "Like"}
+                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all ${liked
                   ? "bg-white text-black border-white"
                   : "bg-white/10 hover:bg-white/20 text-white border-white/20"
-                }`}
-              disabled={likeBusy}
-              onClick={toggleLike}
-              type='button'
-            >
-              <ThumbsUp className={`size-5 ${liked ? "fill-current" : ""}`} />
-            </button>
+                  }`}
+                disabled={likeBusy}
+                onClick={toggleLike}
+                type='button'
+              >
+                <ThumbsUp className={`size-5 ${liked ? "fill-current" : ""}`} />
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Controls fixed at far right edge of container */}
-        <div className='absolute right-6 md:right-10 bottom-6 z-30 flex items-center gap-3'>
-          {detail.trailerKey ? (
+          {/* Controls fixed at far right edge of container */}
+          <div className='absolute right-6 md:right-10 bottom-6 z-30 flex items-center gap-3'>
+            {detail.trailerKey ? (
+              <button
+                aria-label={isPlayingTrailer ? "Pause trailer" : "Play trailer"}
+                className='flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105'
+                onClick={() => {
+                  playerRef.current?.togglePlay();
+                  setIsPlayingTrailer((prev) => !prev);
+                }}
+                type='button'
+              >
+                {isPlayingTrailer ? (
+                  <Pause className='size-5 fill-current' />
+                ) : (
+                  <Play className='size-5 fill-current ml-0.5' />
+                )}
+              </button>
+            ) : null}
+
             <button
-              aria-label={isPlayingTrailer ? "Pause trailer" : "Play trailer"}
-              className='flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105'
+              aria-label={muted ? "Unmute preview" : "Mute preview"}
+              className='w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105'
               onClick={() => {
-                playerRef.current?.togglePlay();
-                setIsPlayingTrailer((prev) => !prev);
+                playerRef.current?.setMuted(!muted);
+                setMuted(!muted);
               }}
               type='button'
             >
-              {isPlayingTrailer ? (
-                <Pause className='size-5 fill-current' />
+              {muted ? (
+                <VolumeX className='size-5' />
               ) : (
-                <Play className='size-5 fill-current ml-0.5' />
+                <Volume2 className='size-5' />
               )}
             </button>
+          </div>
+        </section>
+
+        <section className='modal-body-entrance space-y-9 px-6 pb-10 pt-6 md:px-10'>
+
+          {detail.episodes.length ? (
+            <Episodes
+              initialEpisodes={detail.episodes}
+              mediaId={detail.id}
+              seasons={detail.seasons}
+            />
           ) : null}
 
-          <button
-            aria-label={muted ? "Unmute preview" : "Mute preview"}
-            className='w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105'
-            onClick={() => {
-              playerRef.current?.setMuted(!muted);
-              setMuted(!muted);
-            }}
-            type='button'
-          >
-            {muted ? (
-              <VolumeX className='size-5' />
-            ) : (
-              <Volume2 className='size-5' />
-            )}
-          </button>
-        </div>
-      </section>
+          {detail.recommendations.length ? (
+            <div>
+              <h3 className='section-title'>More Like This</h3>
+              <div className='grid grid-cols-2 gap-4 md:grid-cols-4'>
+                {detail.recommendations.slice(0, 8).map((item) => (
+                  <button
+                    className='group relative aspect-[16/9] overflow-hidden rounded-2xl bg-white/8 text-left'
+                    key={`${item.mediaType}-${item.id}`}
+                    onClick={() => onSelect(item)}
+                    type='button'
+                  >
+                    <Image
+                      src={tmdbImage(
+                        item.backdropPath || item.posterPath,
+                        "w780",
+                      )}
+                      alt=''
+                      fill
+                      sizes='(max-width: 768px) 50vw, 280px'
+                      className='object-cover transition group-hover:scale-105'
+                    />
+                    <span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent p-3 text-sm font-bold'>
+                      {item.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      </div>
 
-      <section className='modal-body-entrance space-y-9 px-6 pb-10 pt-6 md:px-10'>
+      {downloadModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4" onClick={() => setDownloadModalOpen(false)}>
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#121214] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setDownloadModalOpen(false)}
+              className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"
+            >
+              <X className="size-5" />
+            </button>
+            <h3 className="text-xl font-bold text-white mb-2">Download Options</h3>
+            <p className="text-sm text-white/60 mb-6 font-medium">Select a quality to download the media file directly.</p>
 
-        {detail.episodes.length ? (
-          <Episodes
-            initialEpisodes={detail.episodes}
-            mediaId={detail.id}
-            seasons={detail.seasons}
-          />
-        ) : null}
-
-        {detail.recommendations.length ? (
-          <div>
-            <h3 className='section-title'>More Like This</h3>
-            <div className='grid grid-cols-2 gap-4 md:grid-cols-4'>
-              {detail.recommendations.slice(0, 8).map((item) => (
-                <button
-                  className='group relative aspect-[16/9] overflow-hidden rounded-2xl bg-white/8 text-left'
-                  key={`${item.mediaType}-${item.id}`}
-                  onClick={() => onSelect(item)}
-                  type='button'
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1 no-scrollbar">
+              {sources.map((source, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all"
                 >
-                  <Image
-                    src={tmdbImage(
-                      item.backdropPath || item.posterPath,
-                      "w780",
-                    )}
-                    alt=''
-                    fill
-                    sizes='(max-width: 768px) 50vw, 280px'
-                    className='object-cover transition group-hover:scale-105'
-                  />
-                  <span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent p-3 text-sm font-bold'>
-                    {item.title}
-                  </span>
-                </button>
+                  <div className="min-w-0 pr-2">
+                    <div className="font-bold text-white text-base truncate">{source.quality || "Unknown Quality"}</div>
+                    <div className="text-xs text-white/40 mt-1 uppercase tracking-wider font-semibold">{source.type || "mp4"} · {source.size || "Unknown Size"}</div>
+                  </div>
+                  <a
+                    href={source.url}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-all shrink-0 hover:scale-105"
+                  >
+                    <Download className="size-4" />
+                    <span>Download</span>
+                  </a>
+                </div>
               ))}
+              {sources.length === 0 && (
+                <div className="text-center py-6 text-white/40 text-sm">
+                  No download links available.
+                </div>
+              )}
             </div>
           </div>
-        ) : null}
-      </section>
-    </div>
-
-    {downloadModalOpen && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4" onClick={() => setDownloadModalOpen(false)}>
-        <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#121214] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => setDownloadModalOpen(false)}
-            className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"
-          >
-            <X className="size-5" />
-          </button>
-          <h3 className="text-xl font-bold text-white mb-2">Download Options</h3>
-          <p className="text-sm text-white/60 mb-6 font-medium">Select a quality to download the media file directly.</p>
-          
-          <div className="space-y-3 max-h-80 overflow-y-auto pr-1 no-scrollbar">
-            {sources.map((source, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/20 transition-all"
-              >
-                <div className="min-w-0 pr-2">
-                  <div className="font-bold text-white text-base truncate">{source.quality || "Unknown Quality"}</div>
-                  <div className="text-xs text-white/40 mt-1 uppercase tracking-wider font-semibold">{source.type || "mp4"} · {source.size || "Unknown Size"}</div>
-                </div>
-                <a
-                  href={source.url}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-all shrink-0 hover:scale-105"
-                >
-                  <Download className="size-4" />
-                  <span>Download</span>
-                </a>
-              </div>
-            ))}
-            {sources.length === 0 && (
-              <div className="text-center py-6 text-white/40 text-sm">
-                No download links available.
-              </div>
-            )}
-          </div>
         </div>
-      </div>
-    )}
+      )}
 
-    <WatchPartyInviteModal
-      isOpen={isWatchPartyModalOpen}
-      onClose={() => setIsWatchPartyModalOpen(false)}
-      mediaType={detail.mediaType}
-      mediaId={detail.id}
-      season={season}
-      episode={episode}
-    />
+      <WatchPartyInviteModal
+        isOpen={isWatchPartyModalOpen}
+        onClose={() => setIsWatchPartyModalOpen(false)}
+        mediaType={detail.mediaType}
+        mediaId={detail.id}
+        season={season}
+        episode={episode}
+      />
     </>
   );
 }

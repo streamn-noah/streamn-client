@@ -20,7 +20,12 @@ export function WatchPartyInviteModal({
   episode?: number;
 }) {
   const [copied, setCopied] = useState(false);
-  const [roomId] = useState(() => crypto.randomUUID());
+  const [roomId] = useState(() => {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  });
 
   // Generate invite link based on current window location
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";

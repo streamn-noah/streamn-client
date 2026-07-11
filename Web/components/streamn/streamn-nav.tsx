@@ -27,7 +27,7 @@ type Genre = { id: number; name: string };
 function StreamnNavInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, profile } = useAuth();
+  const { user, profile, setAuthModalOpen } = useAuth();
   const [movieGenres, setMovieGenres] = useState<Genre[]>([]);
   const [tvGenres, setTvGenres] = useState<Genre[]>([]);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -275,15 +275,15 @@ function StreamnNavInner() {
               </span>
             </Link>
           ) : (
-            <Link
-              href="/auth"
-              className="flex items-center gap-3 px-2 py-2 text-white/70 hover:text-white transition-colors"
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="w-full flex items-center gap-3 px-2 py-2 text-white/70 hover:text-white transition-colors cursor-pointer"
             >
               <RiUser3Line className="w-6 h-6 shrink-0" />
               <span className="text-xs font-bold text-white opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap">
                 Sign In
               </span>
-            </Link>
+            </button>
           )}
         </div>
       </aside>
@@ -345,18 +345,28 @@ function StreamnNavInner() {
           <span className="text-[10px]">Movies</span>
         </Link>
 
-        <Link
-          href="/library"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/library") ? "text-white font-bold scale-105" : "text-white/50"
-            }`}
-        >
-          {isActive("/library") ? (
-            <RiUser3Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-          ) : (
+        {user ? (
+          <Link
+            href="/library"
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/library") ? "text-white font-bold scale-105" : "text-white/50"
+              }`}
+          >
+            {isActive("/library") ? (
+              <RiUser3Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+            ) : (
+              <RiUser3Line className="w-5 h-5" />
+            )}
+            <span className="text-[10px]">My Space</span>
+          </Link>
+        ) : (
+          <button
+            onClick={() => setAuthModalOpen(true)}
+            className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all text-white/50 hover:text-white cursor-pointer"
+          >
             <RiUser3Line className="w-5 h-5" />
-          )}
-          <span className="text-[10px]">My Space</span>
-        </Link>
+            <span className="text-[10px]">Sign In</span>
+          </button>
+        )}
       </nav>
     </>
   );

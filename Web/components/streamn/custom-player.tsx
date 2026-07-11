@@ -311,6 +311,8 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   // Player UI State
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
+  const [isFallingBack, setIsFallingBack] = useState(false);
+  const [bufferPercent, setBufferPercent] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -581,10 +583,12 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
 
     if (nextIndex < streamData.sources.length) {
       console.warn(`Failing over from '${currentProvider}' (source ${sourceIndex}) to source ${nextIndex}...`);
+      setIsFallingBack(true);
       setSourceIndex(nextIndex);
     } else {
       setIsBuffering(false);
-      setSourceError("All available stream servers failed to load. Try picking a server from Settings.");
+      setIsFallingBack(false);
+      setSourceError("The sources are currently down.");
     }
   }, [sourceIndex, streamData?.sources]);
 
@@ -597,6 +601,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     const streamUrl = getProxiedStreamUrl(currentSource.url, currentSource.type);
 
     setIsBuffering(true);
+    setIsFallingBack(false);
 
     // Clean up previous instance
     if (hlsRef.current) {
@@ -627,7 +632,10 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     if (isHls && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: false,
+        lowLatencyMode: true,
+        capLevelToPlayerSize: true,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 600,
       });
 
       hlsRef.current = hls;
@@ -725,6 +733,32 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
 
   const handleWaiting = () => setIsBuffering(true);
   const handlePlaying = () => setIsBuffering(false);
+
+  useEffect(() => {
+    if (!isBuffering) {
+      setBufferPercent(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      const video = videoRef.current;
+      if (!video) return;
+      const time = video.currentTime;
+      let bufferedEnd = time;
+      for (let i = 0; i < video.buffered.length; i++) {
+        if (time >= video.buffered.start(i) && time <= video.buffered.end(i)) {
+          bufferedEnd = video.buffered.end(i);
+          break;
+        }
+      }
+      const bufferAhead = bufferedEnd - time;
+      const targetBuffer = 10;
+      let percent = Math.floor((bufferAhead / targetBuffer) * 100);
+      if (percent > 99) percent = 99;
+      if (percent < 0) percent = 0;
+      setBufferPercent(prev => (percent > prev ? percent : prev));
+    }, 250);
+    return () => clearInterval(interval);
+  }, [isBuffering]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -979,6 +1013,58 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     !showMovieRecommendations &&
     (mediaType === "movie" ? !hasSkippedMovieCredits : Boolean(nextHref));
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Disable any existing text tracks to avoid duplication when selectedSubtitle changes
+    for (let i = 0; i < video.textTracks.length; i++) {
+      video.textTracks[i].mode = 'disabled';
+    }
+
+    let active = true;
+    let track: TextTrack | null = null;
+
+    if (selectedSubtitle >= 0 && vttTracks[selectedSubtitle]) {
+      const trackData = vttTracks[selectedSubtitle];
+      track = video.addTextTrack("subtitles", trackData.label, trackData.language || "en");
+      track.mode = 'hidden';
+
+      fetch(getProxiedSubtitleUrl(trackData.url))
+        .then((res) => res.text())
+        .then((text) => {
+          if (!active || !track) return;
+          const cues = parseVTT(text);
+          cues.forEach((cue) => {
+            const VTTCueClass = (window as any).VTTCue || (window as any).TextTrackCue;
+            if (VTTCueClass) {
+              track!.addCue(new VTTCueClass(cue.start, cue.end, cue.text));
+            }
+          });
+        })
+        .catch((err) => console.error("Failed to inject native subtitle:", err));
+    }
+
+    const handleFullscreenChange = () => {
+      const isNativeFullscreen = (video as any).webkitDisplayingFullscreen;
+      if (track) {
+        track.mode = isNativeFullscreen ? 'showing' : 'hidden';
+      }
+    };
+
+    video.addEventListener('webkitbeginfullscreen', handleFullscreenChange);
+    video.addEventListener('webkitendfullscreen', handleFullscreenChange);
+    
+    // run once to set initial mode
+    handleFullscreenChange();
+
+    return () => {
+      active = false;
+      video.removeEventListener('webkitbeginfullscreen', handleFullscreenChange);
+      video.removeEventListener('webkitendfullscreen', handleFullscreenChange);
+    };
+  }, [vttTracks, selectedSubtitle]);
+
   return (
     <div
       ref={containerRef}
@@ -994,6 +1080,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       <video
         ref={videoRef}
         className="w-full h-full object-contain cursor-pointer"
+        preload="auto"
         onClick={(e) => {
           e.stopPropagation();
           togglePlay();
@@ -1014,7 +1101,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       <CustomSubtitlesOverlay url={activeSubtitleUrl} currentTime={currentTime} />
 
       {/* Loading / Error Overlay */}
-      {(loadingSources || sourceError || isBuffering) && (
+      {(loadingSources || sourceError || isBuffering || isFallingBack) && (
         <div className="absolute inset-0 grid place-items-center bg-black/60 backdrop-blur-xs pointer-events-none z-20">
           {loadingSources ? (
             <div className="flex flex-col items-center gap-3">
@@ -1045,14 +1132,22 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
                 <RefreshCw className="size-4" /> Try Again
               </button>
             </div>
+          ) : isFallingBack ? (
+            <div className="relative flex flex-col items-center justify-center gap-4 pointer-events-none">
+              <div className="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin" />
+              <div className="text-white/80 text-sm font-bold tracking-wide animate-pulse">Switching to next source...</div>
+            </div>
           ) : isBuffering ? (
-            <div className="w-16 h-16 rounded-full border-4 border-white/20 border-t-white animate-spin" />
+            <div className="relative flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full border-4 border-white/20 border-t-white animate-spin" />
+              <div className="absolute text-white text-xs font-bold">{bufferPercent}%</div>
+            </div>
           ) : null}
         </div>
       )}
 
       {(showSkipIntroCta || showCreditsCta) && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-24 z-40 flex justify-end px-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="pointer-events-none absolute inset-x-0 bottom-32 md:bottom-24 z-40 flex justify-end px-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1198,7 +1293,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       {/* Popover Menus (Subtitles / Settings / Quality / Speed / Servers) */}
       {activeMenu && (
         <div
-          className="absolute bottom-24 right-8 z-40 w-64 bg-black/95 border border-white/10 rounded-2xl p-4 backdrop-blur-xl shadow-2xl text-white text-sm animate-in fade-in slide-in-from-bottom-4 duration-200"
+          className="absolute bottom-24 right-4 md:right-8 z-40 w-64 max-w-[90vw] max-h-[60vh] overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 bg-black/95 border border-white/10 rounded-2xl p-4 backdrop-blur-xl shadow-2xl text-white text-sm animate-in fade-in slide-in-from-bottom-4 duration-200"
           onClick={(e) => e.stopPropagation()}
         >
           {activeMenu === "settings" && (
@@ -1357,6 +1452,61 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         </div>
       )}
 
+      {/* Mobile Center Controls (Play, Rw, Fw) */}
+      <div
+        className={`absolute inset-0 z-20 flex items-center justify-center pointer-events-none transition-opacity duration-300 md:hidden ${
+          showControls && !isBuffering && !isFallingBack && !sourceError && !loadingSources ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <div className="flex items-center gap-10 pointer-events-auto">
+          {/* Rewind 10s */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              skipSeconds(-10);
+            }}
+            className="text-white/90 hover:text-white transition active:scale-95 p-3 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
+            title="Rewind 10s"
+          >
+            <div className="relative flex items-center justify-center">
+              <RotateCcw className="size-8" />
+              <span className="absolute text-[10px] font-black top-[55%] -translate-y-1/2">10</span>
+            </div>
+          </button>
+          
+          {/* Play/Pause */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePlay();
+            }}
+            className="text-white/90 hover:text-white transition active:scale-95 p-5 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
+            title={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? (
+              <Pause className="size-12 fill-current" />
+            ) : (
+              <Play className="size-12 fill-current pl-1" />
+            )}
+          </button>
+          
+          {/* Forward 10s */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              skipSeconds(10);
+            }}
+            className="text-white/90 hover:text-white transition active:scale-95 p-3 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
+            title="Forward 10s"
+          >
+            <div className="relative flex items-center justify-center">
+              <RotateCw className="size-8" />
+              <span className="absolute text-[10px] font-black top-[55%] -translate-y-1/2">10</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
       {/* Bottom Bar Overlay (Netflix Style) */}
       <div
         className={`absolute bottom-0 left-0 right-0 z-30 p-6 bg-gradient-to-t from-black/95 via-black/45 to-transparent transition-opacity duration-300 ${
@@ -1392,7 +1542,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
             {/* Play/Pause */}
             <button
               onClick={togglePlay}
-              className="text-white/90 hover:text-white transition hover:scale-110 active:scale-95 cursor-pointer"
+              className="hidden md:block text-white/90 hover:text-white transition hover:scale-110 active:scale-95 cursor-pointer"
               title={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? (
@@ -1405,7 +1555,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
             {/* Rewind 10s */}
             <button
               onClick={() => skipSeconds(-10)}
-              className="text-white/90 hover:text-white transition hover:scale-110 active:scale-95 cursor-pointer"
+              className="hidden md:block text-white/90 hover:text-white transition hover:scale-110 active:scale-95 cursor-pointer"
               title="Rewind 10s"
             >
               <div className="relative flex items-center justify-center">
@@ -1417,7 +1567,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
             {/* Forward 10s */}
             <button
               onClick={() => skipSeconds(10)}
-              className="text-white/90 hover:text-white transition hover:scale-110 active:scale-95 cursor-pointer"
+              className="hidden md:block text-white/90 hover:text-white transition hover:scale-110 active:scale-95 cursor-pointer"
               title="Forward 10s"
             >
               <div className="relative flex items-center justify-center">
@@ -1473,7 +1623,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
               <div className="relative group/episodes flex items-center h-full">
                 {/* Popover */}
                 <div
-                  className={`absolute bottom-full right-0 mb-0.5 ${showEpisodesPopover ? "flex" : "hidden"} md:group-hover/episodes:flex flex-col bg-neutral-950/95 border border-white/10 rounded-2xl w-80 max-h-96 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 backdrop-blur-md p-4 gap-3 text-white`}
+                  className={`absolute bottom-full right-0 md:-right-4 mb-2 ${showEpisodesPopover ? "flex" : "hidden"} md:group-hover/episodes:flex flex-col bg-neutral-950/95 border border-white/10 rounded-2xl w-[90vw] md:w-80 max-h-[60vh] md:max-h-96 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 backdrop-blur-md p-4 gap-3 text-white`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-between border-b border-white/10 pb-2">
@@ -1572,17 +1722,6 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
                 </button>
               </div>
             )}
-
-            {/* Subtitles Menu Trigger */}
-            <button
-              onClick={() => setActiveMenu(activeMenu === "subtitles" ? null : "subtitles")}
-              className={`p-1 rounded-md transition hover:scale-110 cursor-pointer ${
-                activeMenu === "subtitles" || selectedSubtitle !== -1 ? "text-white bg-white/20" : "text-white/80 hover:text-white"
-              }`}
-              title="Subtitles"
-            >
-              <Captions className="size-6" />
-            </button>
 
             {/* Settings Menu Trigger */}
             <button

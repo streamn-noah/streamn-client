@@ -22,6 +22,7 @@ export type SubtitleItem = {
   url: string;
   format?: string;
   label: string;
+  language?: string;
 };
 
 export type StreamBackendResponse = {

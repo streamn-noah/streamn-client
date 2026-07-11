@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase";
 import type { Database } from "@/lib/supabase-types";
 import { getContinueWatching } from "@/lib/streamn-storage";
 import { syncWatchSession } from "@/lib/user-actions";
+import { AuthView } from "@/components/auth/auth-view";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -22,6 +23,8 @@ type AuthContextValue = {
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  authModalOpen: boolean;
+  setAuthModalOpen: (open: boolean) => void;
 };
 
 const AuthContext = createContext<AuthContextValue>({
@@ -31,6 +34,8 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signOut: async () => {},
   refreshProfile: async () => {},
+  authModalOpen: false,
+  setAuthModalOpen: () => {},
 });
 
 export function useAuth() {
@@ -43,6 +48,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [currentPath, setCurrentPath] = useState("/");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setCurrentPath(window.location.pathname + window.location.search);
+    }
+  }, [authModalOpen]);
 
   async function fetchProfile(uid: string) {
     const { data } = await supabase
@@ -112,9 +125,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, profile, loading, signOut, refreshProfile }}
+      value={{
+        user,
+        session,
+        profile,
+        loading,
+        signOut,
+        refreshProfile,
+        authModalOpen,
+        setAuthModalOpen,
+      }}
     >
       {children}
+      
+      {/* Global Auth Modal */}
+      {authModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setAuthModalOpen(false)}
+          />
+          <div className="relative w-full max-w-md overflow-hidden rounded-[24px] border border-white/10 bg-[#0a0a0a] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setAuthModalOpen(false)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/40 text-white/60 hover:text-white hover:bg-black/60 backdrop-blur-md transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+            <div className="relative z-0">
+              <AuthView returnTo={currentPath} isModal={true} />
+            </div>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }
