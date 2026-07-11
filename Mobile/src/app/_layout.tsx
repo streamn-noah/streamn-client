@@ -1,4 +1,3 @@
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -25,9 +24,9 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={DarkTheme}>
+    <>
       <Slot />
       <StatusBar style="light" />
-    </ThemeProvider>
+    </>
   );
 }
