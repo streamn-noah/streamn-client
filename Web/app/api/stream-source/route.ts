@@ -1,6 +1,35 @@
 import { NextResponse } from "next/server";
 import { getMovieBoxDownloadSources, getMovieBoxStreams } from "@/lib/moviebox";
 import { getMediaDetail } from "@/lib/tmdb";
+import { searchSubtitles } from "wyzie-lib";
+
+async function fetchWyzieSubtitles(tmdbId: number, type: string, season?: number, episode?: number) {
+  try {
+    const wyzieKey = process.env.WYZIE_API_KEY;
+    if (!wyzieKey) return [];
+
+    const params: any = {
+      tmdb_id: tmdbId,
+      language: ["en"],
+      key: wyzieKey,
+    };
+    if (type === "tv" && season !== undefined && episode !== undefined) {
+      params.season = season;
+      params.episode = episode;
+    }
+
+    const data = await searchSubtitles(params);
+
+    return (data || []).map((sub: any) => ({
+      url: sub.url,
+      format: sub.format || "srt",
+      label: `Wyzie - ${sub.language || "English"}${sub.origin ? ` (${sub.origin})` : ""}`,
+    }));
+  } catch (error) {
+    console.error("Wyzie subtitles error:", error);
+    return [];
+  }
+}
 
 const BACKEND_URLS = [
   process.env.BACKEND_URL,
@@ -42,6 +71,13 @@ export async function GET(request: Request) {
     );
   }
 
+  let wyzieSubtitles: any[] = [];
+  try {
+    wyzieSubtitles = await fetchWyzieSubtitles(Number(id), type, Number(season), Number(episode));
+  } catch (err) {
+    console.error(err);
+  }
+
   // 1. Try MovieBox default streaming source first
   try {
     // Resolve the media title from TMDB so MovieBox can search by keyword
@@ -71,8 +107,7 @@ export async function GET(request: Request) {
         const sortedStreams = [...movieboxData.streams].sort(
           (a, b) => (b.resolution || 0) - (a.resolution || 0)
         );
-        const selectedStreams =
-          mode === "download" ? sortedStreams : sortedStreams.slice(0, 1);
+        const selectedStreams = sortedStreams;
 
         const sources = selectedStreams.map((stream) => ({
           url: stream.url,
@@ -106,6 +141,9 @@ export async function GET(request: Request) {
           const bEnglish = /english|eng/i.test(b.label);
           return Number(bEnglish) - Number(aEnglish);
         });
+
+        // Merge Wyzie subtitles
+        subtitles.push(...wyzieSubtitles);
 
         return NextResponse.json(
           {
@@ -142,7 +180,7 @@ export async function GET(request: Request) {
           responseId: data.responseId,
           expiresAt: data.expiresAt,
           sources: data.sources,
-          subtitles: Array.isArray(data.subtitles) ? data.subtitles : [],
+          subtitles: [...(Array.isArray(data.subtitles) ? data.subtitles : []), ...wyzieSubtitles],
           diagnostics: data.diagnostics || [],
         },
         {
@@ -156,7 +194,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json(
-    { sources: [], subtitles: [], error: "No stream sources available" },
+    { sources: [], subtitles: wyzieSubtitles, error: "No stream sources available" },
     { status: 200 }
   );
 }

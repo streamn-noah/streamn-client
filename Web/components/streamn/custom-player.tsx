@@ -56,6 +56,7 @@ type CustomPlayerProps = {
   nextHref?: string | null;
   recommendations?: MediaSummary[];
   runtimeMinutes?: number | null;
+  fileSizeRange?: string | null;
   isWatchParty?: boolean;
   onWatchPartyToggle?: () => void;
   showWatchPartyActive?: boolean;
@@ -80,7 +81,7 @@ type IntroDbMediaRecord = {
 };
 
 function parseVTTTime(timeStr: string): number {
-  const parts = timeStr.split(":");
+  const parts = timeStr.replace(",", ".").split(":");
   let hours = 0;
   let minutes = 0;
   let seconds = 0;
@@ -281,6 +282,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       nextHref,
       recommendations = [],
       runtimeMinutes = null,
+      fileSizeRange = null,
       isWatchParty = false,
       onWatchPartyToggle,
       showWatchPartyActive = false,
@@ -470,7 +472,9 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     const cached = getCachedStreamSources(mediaType, mediaId, season, episode);
     if (cached && cached.sources && cached.sources.length > 0) {
       setStreamData(cached);
-      setVttTracks(cached.subtitles || []);
+      const tracks = cached.subtitles || [];
+      setVttTracks(tracks);
+      if (tracks.length > 0) setSelectedSubtitle(0);
       setLoadingSources(false);
       return;
     }
@@ -479,7 +483,9 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       .then((data) => {
         if (!active) return;
         setStreamData(data);
-        setVttTracks(data.subtitles || []);
+        const tracks = data.subtitles || [];
+        setVttTracks(tracks);
+        if (tracks.length > 0) setSelectedSubtitle(0);
         if (!data.sources || data.sources.length === 0) {
           setSourceError("No available stream sources for this title.");
         }
@@ -820,10 +826,30 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   // Fullscreen
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    const video = videoRef.current;
+    
+    // Check if we are currently in any fullscreen mode
+    const isCurrentlyFullscreen = 
+      document.fullscreenElement || 
+      (document as any).webkitFullscreenElement;
+
+    if (!isCurrentlyFullscreen) {
+      if (containerRef.current.requestFullscreen) {
+        containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+      } else if ((containerRef.current as any).webkitRequestFullscreen) {
+        (containerRef.current as any).webkitRequestFullscreen();
+        setIsFullscreen(true);
+      } else if (video && (video as any).webkitEnterFullscreen) {
+        (video as any).webkitEnterFullscreen();
+        setIsFullscreen(true);
+      }
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+        setIsFullscreen(false);
+      }
     }
   };
 
@@ -1137,11 +1163,18 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
             <h1 className="text-lg md:text-xl font-bold tracking-wide drop-shadow-md">
               {item.title}
             </h1>
-            <p className="text-xs md:text-sm text-white/60 font-semibold tracking-wider drop-shadow">
-              {mediaType === "movie"
-                ? "Movie"
-                : `Season ${season}, Ep. ${episode}`}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs md:text-sm text-white/60 font-semibold tracking-wider drop-shadow">
+                {mediaType === "movie"
+                  ? "Movie"
+                  : `Season ${season}, Ep. ${episode}`}
+              </p>
+              {(currentSourceInfo?.size || fileSizeRange) ? (
+                <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-[10px] font-bold text-blue-400 border border-blue-500/30">
+                  {currentSourceInfo?.size || fileSizeRange}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -1173,23 +1206,14 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
               <div className="text-xs font-bold text-white/40 uppercase px-2 mb-2">Settings</div>
               
               <button
-                onClick={() => setActiveMenu("servers")}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/10 transition text-left cursor-pointer"
-              >
-                <span>Server Source</span>
-                <span className="text-xs text-white/50 flex items-center gap-1">
-                  {currentSourceInfo?.provider?.name || `Server ${sourceIndex + 1}`}
-                  <ChevronRight className="size-4" />
-                </span>
-              </button>
-
-              <button
                 onClick={() => setActiveMenu("quality")}
                 className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/10 transition text-left cursor-pointer"
               >
                 <span>Quality</span>
                 <span className="text-xs text-white/50 flex items-center gap-1">
-                  {selectedQuality === -1 ? "Auto" : hlsLevels[selectedQuality]?.name || "Auto"}
+                  {hlsLevels.length > 0 
+                    ? (selectedQuality === -1 ? "Auto" : hlsLevels[selectedQuality]?.name || "Auto") 
+                    : (currentSourceInfo?.quality || currentSourceInfo?.provider?.name || `Server ${sourceIndex + 1}`)}
                   <ChevronRight className="size-4" />
                 </span>
               </button>
@@ -1218,31 +1242,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
             </div>
           )}
 
-          {activeMenu === "servers" && (
-            <div>
-              <div className="flex items-center justify-between mb-2 px-2">
-                <span className="text-xs font-bold text-white/40 uppercase">Select Server</span>
-                <button
-                  onClick={() => setActiveMenu("settings")}
-                  className="text-xs text-white/60 hover:text-white cursor-pointer"
-                >
-                  Back
-                </button>
-              </div>
-              <div className="max-h-60 overflow-y-auto space-y-1">
-                {streamData?.sources.map((src, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSourceChange(idx)}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/10 text-left transition cursor-pointer"
-                  >
-                    <span className="truncate">{src.provider?.name || `Server ${idx + 1}`} ({src.quality || "HLS"})</span>
-                    {sourceIndex === idx && <Check className="size-4 text-white shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+
 
           {activeMenu === "subtitles" && (
             <div>
@@ -1289,23 +1289,42 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
                 </button>
               </div>
               <div className="max-h-60 overflow-y-auto space-y-1">
-                <button
-                  onClick={() => handleQualityChange(-1)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/10 text-left transition cursor-pointer"
-                >
-                  <span>Auto</span>
-                  {selectedQuality === -1 && <Check className="size-4 text-white" />}
-                </button>
-                {hlsLevels.map((lvl) => (
-                  <button
-                    key={lvl.id}
-                    onClick={() => handleQualityChange(lvl.id)}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/10 text-left transition cursor-pointer"
-                  >
-                    <span>{lvl.name}</span>
-                    {selectedQuality === lvl.id && <Check className="size-4 text-white" />}
-                  </button>
-                ))}
+                {hlsLevels.length > 0 ? (
+                  <>
+                    <button
+                      onClick={() => handleQualityChange(-1)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/10 text-left transition cursor-pointer"
+                    >
+                      <span>Auto</span>
+                      {selectedQuality === -1 && <Check className="size-4 text-white" />}
+                    </button>
+                    {hlsLevels.map((lvl) => (
+                      <button
+                        key={lvl.id}
+                        onClick={() => handleQualityChange(lvl.id)}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/10 text-left transition cursor-pointer"
+                      >
+                        <span>{lvl.name}</span>
+                        {selectedQuality === lvl.id && <Check className="size-4 text-white" />}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  streamData?.sources.map((src, idx) => {
+                    const isMovieBox = src.provider?.id === "moviebox";
+                    const label = isMovieBox ? (src.quality || "Default") : `${src.provider?.name || `Server ${idx + 1}`} (${src.quality || "HLS"})`;
+                    return (
+                      <button
+                        key={`src-${idx}`}
+                        onClick={() => handleSourceChange(idx)}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/10 text-left transition cursor-pointer"
+                      >
+                        <span className="truncate">{label}</span>
+                        {sourceIndex === idx && <Check className="size-4 text-white shrink-0" />}
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -1369,7 +1388,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         {/* Controls Button Row */}
         <div className="flex items-center justify-between">
           {/* Left Buttons Group */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
             {/* Play/Pause */}
             <button
               onClick={togglePlay}
@@ -1439,7 +1458,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
           </div>
 
           {/* Right Buttons Group */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
             {/* Details Modal Trigger */}
             <button
               onClick={() => setShowDetailsModal(true)}

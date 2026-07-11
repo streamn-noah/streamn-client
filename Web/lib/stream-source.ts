@@ -111,6 +111,30 @@ export async function fetchStreamSources(
   }
 }
 
+export function getFileSizeRange(sources: SourceItem[]): string | null {
+  if (!sources.length) return null;
+
+  const sizedSources = sources.filter((s) => s.size);
+  if (!sizedSources.length) return null;
+  if (sizedSources.length === 1) return sizedSources[0].size!;
+
+  const parseSize = (sizeStr: string) => {
+    const num = parseFloat(sizeStr);
+    if (isNaN(num)) return 0;
+    if (sizeStr.toUpperCase().includes("GB")) return num * 1024;
+    return num;
+  };
+
+  const sorted = [...sizedSources].sort(
+    (a, b) => parseSize(a.size!) - parseSize(b.size!),
+  );
+  const minSize = sorted[0].size!;
+  const maxSize = sorted[sorted.length - 1].size!;
+
+  if (minSize === maxSize) return minSize;
+  return `${minSize} - ${maxSize}`;
+}
+
 export function getCachedStreamSources(
   type: "movie" | "tv",
   id: number,

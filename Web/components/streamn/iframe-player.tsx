@@ -43,6 +43,7 @@ type IframePlayerProps = {
   onReady?: () => void;
   onClose?: () => void;
   onVideoEvent?: (type: string, current: number, duration: number) => void;
+  fileSizeRange?: string | null;
 };
 
 export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
@@ -60,6 +61,7 @@ export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
       onReady,
       onClose,
       onVideoEvent,
+      fileSizeRange = null,
     } = props;
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -341,11 +343,18 @@ export const IframePlayer = forwardRef<IframePlayerHandle, IframePlayerProps>(
           <h1 className="text-xs sm:text-base md:text-lg font-bold text-white truncate drop-shadow-md">
             {item.title}
           </h1>
-          <p className="text-[10px] sm:text-xs md:text-sm text-white/70 font-medium truncate drop-shadow">
-            {mediaType === "movie"
-              ? "Movie"
-              : `Season ${season}, Ep. ${episode}`}
-          </p>
+          <div className="flex items-center gap-1.5 justify-center">
+            <p className="text-[10px] sm:text-xs md:text-sm text-white/70 font-medium truncate drop-shadow">
+              {mediaType === "movie"
+                ? "Movie"
+                : `Season ${season}, Ep. ${episode}`}
+            </p>
+            {fileSizeRange ? (
+              <span className="shrink-0 px-1.5 py-0.5 rounded bg-blue-500/20 text-[9px] sm:text-[10px] font-bold text-blue-400 border border-blue-500/30">
+                {fileSizeRange}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {/* Right Controls */}
