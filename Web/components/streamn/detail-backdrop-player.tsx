@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { tmdbImage } from "@/lib/media";
+import { useLowDataMode } from "@/components/providers/low-data-provider";
 
 declare global {
   interface Window {
@@ -48,6 +49,7 @@ export const DetailBackdropPlayer = forwardRef<
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
+  const { isLowDataMode } = useLowDataMode();
 
   useEffect(() => {
     setVideoLoaded(false);
@@ -134,7 +136,7 @@ export const DetailBackdropPlayer = forwardRef<
     [isPlaying, onMutedChange],
   );
 
-  const imageSrc = tmdbImage(backdropPath || posterPath, "original");
+  const imageSrc = tmdbImage(backdropPath || posterPath, isLowDataMode ? "w780" : "original");
 
   return (
     <div className='absolute inset-0 overflow-hidden bg-black select-none pointer-events-none'>
@@ -142,16 +144,18 @@ export const DetailBackdropPlayer = forwardRef<
         <Image
           alt=''
           className={`object-cover object-top transition-opacity duration-700 ${
-            videoLoaded ? "opacity-0" : "opacity-80"
+            videoLoaded && !isLowDataMode ? "opacity-0" : "opacity-80"
           }`}
           fill
-          priority
+          priority={!isLowDataMode}
+          loading={isLowDataMode ? "lazy" : undefined}
+          quality={isLowDataMode ? 60 : 85}
           sizes='100vw'
           src={imageSrc}
         />
       ) : null}
 
-      {trailerKey ? (
+      {!isLowDataMode && trailerKey ? (
         <iframe
           id={`detail-yt-player-${trailerKey}`}
           ref={iframeRef}

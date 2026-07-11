@@ -33,6 +33,7 @@ import {
   getWatchProgress,
   type WatchProgress,
 } from "@/lib/streamn-storage";
+import { useLowDataMode } from "@/components/providers/low-data-provider";
 
 import disneyLogo from "@/assets/images/Disney_Plus_logo.svg";
 import netflixLogo from "@/assets/images/Netflix_2014_logo.svg";
@@ -116,13 +117,14 @@ function LazyRevealRow({
   placeholderClassName?: string;
 }) {
   const { ref, visible } = useRevealOnScroll();
+  const { isLowDataMode } = useLowDataMode();
 
   return (
     <div ref={ref}>
       {visible ? (
         <div
-          className="discover-row-enter"
-          style={{ animationDelay: `${80 + animationIndex * 90}ms` }}
+          className={isLowDataMode ? "" : "discover-row-enter"}
+          style={isLowDataMode ? undefined : { animationDelay: `${80 + animationIndex * 90}ms` }}
         >
           {children}
         </div>
@@ -142,6 +144,7 @@ function MediaCard({
   onSelect: (item: MediaSummary) => void;
   onRemove?: (item: MediaSummary) => void;
 }) {
+  const { isLowDataMode } = useLowDataMode();
   return (
     <div
       className="flex flex-col gap-1.5 shrink-0 w-32 sm:w-40 md:w-44 group cursor-pointer"
@@ -149,10 +152,12 @@ function MediaCard({
     >
       <div className="relative aspect-[1/1.4] w-full rounded-xl overflow-hidden bg-zinc-900 border border-white/5 shadow-md group-hover:-translate-y-1.5 group-hover:ring-2 group-hover:ring-white/40 group-hover:border-white/50 transition-all duration-300">
         <Image
-          src={tmdbImage(item.posterPath || item.backdropPath, "w500")}
+          src={tmdbImage(item.posterPath || item.backdropPath, isLowDataMode ? "w200" : "w500")}
           alt={item.title}
           fill
           sizes="(max-width: 768px) 160px, 200px"
+          loading={isLowDataMode ? "lazy" : undefined}
+          quality={isLowDataMode ? 60 : 75}
           className="object-cover transition-transform duration-500 group-hover:scale-105"
         />
         {onRemove && (
@@ -195,6 +200,7 @@ function Top10Card({
   rank: number;
   onSelect: (item: MediaSummary) => void;
 }) {
+  const { isLowDataMode } = useLowDataMode();
   return (
     <div
       className="relative flex items-center shrink-0 cursor-pointer group select-none pr-3"
@@ -205,10 +211,12 @@ function Top10Card({
       </span>
       <div className="relative aspect-[1/1.4] w-32 sm:w-40 md:w-44 rounded-xl overflow-hidden bg-zinc-900 border border-white/10 shadow-2xl z-10 group-hover:-translate-y-1.5 group-hover:ring-2 group-hover:ring-white/40 group-hover:border-white/50 transition-all duration-300">
         <Image
-          src={tmdbImage(item.posterPath || item.backdropPath, "w500")}
+          src={tmdbImage(item.posterPath || item.backdropPath, isLowDataMode ? "w200" : "w500")}
           alt={item.title}
           fill
           sizes="180px"
+          loading={isLowDataMode ? "lazy" : undefined}
+          quality={isLowDataMode ? 60 : 75}
           className="object-cover transition-transform duration-500 group-hover:scale-105"
         />
       </div>
@@ -379,6 +387,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   const tab = searchParams.get("tab") || "home";
   const genreId = Number(searchParams.get("genre"));
   const genreType = searchParams.get("type") as "movie" | "tv";
+  const { isLowDataMode } = useLowDataMode();
 
   const [bannerIndex, setBannerIndex] = useState(0);
   const [isPlayingVideo, setIsPlayingVideo] = useState(true);
@@ -791,15 +800,16 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
               <Image
                 src={tmdbImage(
                   activeBanner.backdropPath || activeBanner.posterPath,
-                  "original"
+                  isLowDataMode ? "w780" : "original"
                 )}
                 alt={activeBanner.title}
                 fill
-                priority
-                className={`object-cover object-top transition-opacity duration-700 ${videoLoaded ? "opacity-0" : "opacity-80"
+                priority={!isLowDataMode}
+                quality={isLowDataMode ? 60 : 85}
+                className={`object-cover object-top transition-opacity duration-700 ${videoLoaded && !isLowDataMode ? "opacity-0" : "opacity-80"
                   }`}
               />
-              {activeBanner.trailerKey && (
+              {!isLowDataMode && activeBanner.trailerKey && (
                 <iframe
                   id={`banner-yt-player-${activeBanner.id}`}
                   ref={iframeRef}
@@ -818,7 +828,8 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
 
           {/* Pause and Mute controls placed at right edge of Banner */}
-          <div className="flex absolute right-4 md:right-16 top-1/2 -translate-y-1/2 z-30 flex-col gap-3.5">
+          {!isLowDataMode && (
+            <div className="flex absolute right-4 md:right-16 top-1/2 -translate-y-1/2 z-30 flex-col gap-3.5">
             <button
               onClick={togglePlayVideo}
               className="w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105"
@@ -843,7 +854,8 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
                 <Volume2 className="w-5 h-5" />
               )}
             </button>
-          </div>
+            </div>
+          )}
 
           {/* Banner Copy Stack */}
           <div className="absolute inset-x-6 md:left-14 md:right-auto bottom-24 z-20 max-w-xl flex flex-col items-center text-center md:items-start md:text-left mx-auto md:mx-0 gap-3.5">

@@ -33,6 +33,7 @@ import { cinesrcUrl, tmdbImage } from "@/lib/media";
 import { fetchStreamSources } from "@/lib/stream-source";
 import { getWatchProgress, watchHref } from "@/lib/streamn-storage";
 import { getLikedIds, likeMedia, unlikeMedia } from "@/lib/user-actions";
+import { useLowDataMode } from "@/components/providers/low-data-provider";
 
 function runtimeLabel(minutes: number | null) {
   if (!minutes) return "";
@@ -79,6 +80,7 @@ function Episodes({
   mediaId: number;
   seasons: MediaDetail["seasons"];
 }) {
+  const { isLowDataMode } = useLowDataMode();
   const filterAired = (eps: Episode[]) => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -187,10 +189,12 @@ function Episodes({
                 <span className='relative aspect-video w-24 shrink-0 overflow-hidden rounded-xl bg-white/8 md:w-44'>
                   {episode.stillPath ? (
                     <Image
-                      src={tmdbImage(episode.stillPath, "w300")}
+                      src={tmdbImage(episode.stillPath, isLowDataMode ? "w200" : "w300")}
                       alt=''
                       fill
                       sizes='(max-width: 768px) 96px, 176px'
+                      loading={isLowDataMode ? "lazy" : undefined}
+                      quality={isLowDataMode ? 60 : 75}
                       className='object-cover transition-transform duration-300 group-hover:scale-[1.03]'
                     />
                   ) : (
@@ -317,6 +321,7 @@ export function MediaDetailContent({
   detail: MediaDetail;
   onSelect: (item: MediaSummary) => void;
 }) {
+  const { isLowDataMode } = useLowDataMode();
   const router = useRouter();
   const { user, setAuthModalOpen } = useAuth();
   const playerRef = useRef<DetailBackdropPlayerHandle>(null);
@@ -631,41 +636,43 @@ export function MediaDetailContent({
           </div>
 
           {/* Controls fixed at far right edge of container */}
-          <div className='absolute right-6 md:right-10 bottom-6 z-30 flex items-center gap-3'>
-            {detail.trailerKey ? (
+          {!isLowDataMode && (
+            <div className='absolute right-6 md:right-10 bottom-6 z-30 flex items-center gap-3'>
+              {detail.trailerKey ? (
+                <button
+                  aria-label={isPlayingTrailer ? "Pause trailer" : "Play trailer"}
+                  className='flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105'
+                  onClick={() => {
+                    playerRef.current?.togglePlay();
+                    setIsPlayingTrailer((prev) => !prev);
+                  }}
+                  type='button'
+                >
+                  {isPlayingTrailer ? (
+                    <Pause className='size-5 fill-current' />
+                  ) : (
+                    <Play className='size-5 fill-current ml-0.5' />
+                  )}
+                </button>
+              ) : null}
+
               <button
-                aria-label={isPlayingTrailer ? "Pause trailer" : "Play trailer"}
-                className='flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105'
+                aria-label={muted ? "Unmute preview" : "Mute preview"}
+                className='w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105'
                 onClick={() => {
-                  playerRef.current?.togglePlay();
-                  setIsPlayingTrailer((prev) => !prev);
+                  playerRef.current?.setMuted(!muted);
+                  setMuted(!muted);
                 }}
                 type='button'
               >
-                {isPlayingTrailer ? (
-                  <Pause className='size-5 fill-current' />
+                {muted ? (
+                  <VolumeX className='size-5' />
                 ) : (
-                  <Play className='size-5 fill-current ml-0.5' />
+                  <Volume2 className='size-5' />
                 )}
               </button>
-            ) : null}
-
-            <button
-              aria-label={muted ? "Unmute preview" : "Mute preview"}
-              className='w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105'
-              onClick={() => {
-                playerRef.current?.setMuted(!muted);
-                setMuted(!muted);
-              }}
-              type='button'
-            >
-              {muted ? (
-                <VolumeX className='size-5' />
-              ) : (
-                <Volume2 className='size-5' />
-              )}
-            </button>
-          </div>
+            </div>
+          )}
         </section>
 
         <section className='modal-body-entrance space-y-9 px-6 pb-10 pt-6 md:px-10'>

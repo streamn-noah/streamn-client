@@ -39,6 +39,7 @@ import {
 } from "@/lib/stream-source";
 import { commitWatchSession, getWatchProgress, watchHref } from "@/lib/streamn-storage";
 import { syncWatchSession } from "@/lib/user-actions";
+import { useLowDataMode } from "@/components/providers/low-data-provider";
 
 export type CustomPlayerHandle = {
   postCommand: (func: string, args?: any[]) => void;
@@ -291,6 +292,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     ref
   ) {
   const router = useRouter();
+  const { isLowDataMode } = useLowDataMode();
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -593,11 +595,20 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   }, [sourceIndex, streamData?.sources]);
 
   // 2. Initialize HLS & Video playback
+  const filteredSources = useMemo(() => {
+    if (!streamData?.sources) return [];
+    if (!isLowDataMode) return streamData.sources;
+    return streamData.sources.filter(s => {
+      if (!s.quality) return true;
+      return !s.quality.includes("1080");
+    });
+  }, [streamData?.sources, isLowDataMode]);
+
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !streamData || !streamData.sources || !streamData.sources[sourceIndex]) return;
+    if (!video || !streamData || !filteredSources.length || !filteredSources[sourceIndex]) return;
 
-    const currentSource = streamData.sources[sourceIndex];
+    const currentSource = filteredSources[sourceIndex];
     const streamUrl = getProxiedStreamUrl(currentSource.url, currentSource.type);
 
     setIsBuffering(true);
@@ -649,12 +660,20 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         return;
       }
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
         setIsBuffering(false);
-        const levels = hls.levels.map((lvl, index) => ({
+        const levels = data.levels.map((lvl, index) => ({
           id: index,
           name: lvl.height ? `${lvl.height}p` : `Level ${index + 1}`,
         }));
+        
+        if (isLowDataMode) {
+          const maxAllowedLevel = data.levels.findIndex(l => l.height && l.height > 720);
+          if (maxAllowedLevel > 0) {
+            hls.autoLevelCapping = maxAllowedLevel - 1;
+          }
+        }
+
         setHlsLevels(levels);
 
         if (initialResumeRef.current && initialResumeRef.current > 0) {
@@ -696,7 +715,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         hlsRef.current = null;
       }
     };
-  }, [streamData, sourceIndex, tryNextSource]);
+  }, [filteredSources, sourceIndex, tryNextSource]);
 
   // Video Event Handlers
   const handleTimeUpdate = () => {
@@ -932,9 +951,9 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     setActiveMenu(null);
   };
 
-  const currentSourceInfo = streamData?.sources[sourceIndex];
+  const currentSourceInfo = filteredSources[sourceIndex];
   const downloadSource = useMemo(() => {
-    const sources = streamData?.sources ?? [];
+    const sources = filteredSources ?? [];
     if (!sources.length) return null;
 
     const directSource = sources.find((source) => {
@@ -944,7 +963,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     });
 
     return directSource ?? currentSourceInfo ?? sources[0];
-  }, [currentSourceInfo, streamData?.sources]);
+  }, [currentSourceInfo, filteredSources]);
   const activeIntroSegment = useMemo(
     () => findActiveSegment(introDbSegments?.intro ?? [], currentTime, duration),
     [currentTime, duration, introDbSegments?.intro],
@@ -1337,8 +1356,6 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
             </div>
           )}
 
-
-
           {activeMenu === "subtitles" && (
             <div>
               <div className="flex items-center justify-between mb-2 px-2">
@@ -1405,7 +1422,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
                     ))}
                   </>
                 ) : (
-                  streamData?.sources.map((src, idx) => {
+                  filteredSources.map((src, idx) => {
                     const isMovieBox = src.provider?.id === "moviebox";
                     const label = isMovieBox ? (src.quality || "Default") : `${src.provider?.name || `Server ${idx + 1}`} (${src.quality || "HLS"})`;
                     return (

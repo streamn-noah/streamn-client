@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { AuthProvider } from "@/components/providers/auth-provider";
+import { LowDataProvider } from "@/components/providers/low-data-provider";
 import { ServiceWorkerRegister } from "@/components/providers/sw-register";
+import { LowDataToggle } from "@/components/streamn/low-data-toggle";
 import "./globals.css";
 
 // Mock Geist fonts to bypass Turbopack's Windows font compilation bug
@@ -63,10 +65,13 @@ export default function RootLayout({
       className={`${satoshi.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-black" suppressHydrationWarning>
-        <AuthProvider>
-          {children}
-          <ServiceWorkerRegister />
-        </AuthProvider>
+        <LowDataProvider>
+          <AuthProvider>
+            <LowDataToggle />
+            {children}
+            <ServiceWorkerRegister />
+          </AuthProvider>
+        </LowDataProvider>
       </body>
     </html>
   );

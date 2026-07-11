@@ -26,6 +26,12 @@ input {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Low Data Mode overrides */
+body.low-data * {
+  animation: none !important;
+  transition: none !important;
+}
+
 input {
   min-width: 0;
 }
