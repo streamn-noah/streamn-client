@@ -169,6 +169,7 @@ const styles = StyleSheet.create({
   },
   labelLg: {
     fontFamily: fontFamilies.bodyBold,
+    fontWeight: '700',
     fontSize: 16,
     lineHeight: 24,
   },

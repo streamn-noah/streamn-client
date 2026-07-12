@@ -2,12 +2,12 @@ import { colors } from "./colors";
 import type { TextStyle } from "react-native";
 
 export const fontFamilies = {
-  display: "Newsreader_500Medium",
-  body: "Satoshi-Regular",
-  bodyMedium: "Satoshi-Medium",
-  bodySemiBold: "Satoshi-Bold",
-  bodyBold: "Satoshi-Bold",
-  bodyHeavy: "Newsreader_700Bold",
+  display: "System",
+  body: "System",
+  bodyMedium: "System",
+  bodySemiBold: "System",
+  bodyBold: "System",
+  bodyHeavy: "System",
 } as const;
 
 export const typography: Record<
@@ -16,6 +16,7 @@ export const typography: Record<
 > = {
   displayLarge: {
     fontFamily: fontFamilies.display,
+    fontWeight: '700',
     fontSize: 46,
     lineHeight: 54,
     letterSpacing: -0.7,
@@ -23,6 +24,7 @@ export const typography: Record<
   },
   headline: {
     fontFamily: fontFamilies.bodyBold,
+    fontWeight: '700',
     fontSize: 28,
     lineHeight: 34,
     letterSpacing: -0.7,
@@ -30,6 +32,7 @@ export const typography: Record<
   },
   title: {
     fontFamily: fontFamilies.bodySemiBold,
+    fontWeight: '600',
     fontSize: 24,
     lineHeight: 26,
     letterSpacing: -0.7,
@@ -37,6 +40,7 @@ export const typography: Record<
   },
   body: {
     fontFamily: fontFamilies.body,
+    fontWeight: '400',
     fontSize: 16,
     lineHeight: 24,
     letterSpacing: -0.7,
@@ -44,6 +48,7 @@ export const typography: Record<
   },
   bodyBold: {
     fontFamily: fontFamilies.bodyBold,
+    fontWeight: '700',
     fontSize: 16,
     lineHeight: 24,
     letterSpacing: -0.7,
@@ -51,6 +56,7 @@ export const typography: Record<
   },
   caption: {
     fontFamily: fontFamilies.bodyMedium,
+    fontWeight: '500',
     fontSize: 13,
     lineHeight: 18,
     letterSpacing: -0.7,
@@ -58,6 +64,7 @@ export const typography: Record<
   },
   button: {
     fontFamily: fontFamilies.bodySemiBold,
+    fontWeight: '600',
     fontSize: 15,
     lineHeight: 20,
     letterSpacing: -0.7,

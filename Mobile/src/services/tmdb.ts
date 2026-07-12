@@ -35,7 +35,7 @@ type TmdbDetail = TmdbMedia & {
   episode_run_time?: number[];
   genres?: { id: number; name: string }[];
   images?: { logos?: { file_path: string; iso_639_1: string | null }[] };
-  videos?: { results?: { key: string; site: string; type: string; official?: boolean }[] };
+  videos?: { results?: { key: string; site: string; type: string; name?: string; official?: boolean }[] };
   credits?: {
     cast?: {
       id: number;
@@ -126,7 +126,7 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
   if (!bearer && key) url.searchParams.set("api_key", key);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
     const response = await fetch(url.toString(), {
@@ -325,4 +325,111 @@ export async function enrichWithLogos(items: MediaSummary[]) {
     }),
   );
   return enriched;
+}
+
+export async function getMediaDetail(mediaType: MediaType, id: number): Promise<MediaDetail | null> {
+  const path = mediaType === "movie" ? `/movie/${id}` : `/tv/${id}`;
+  const params: Record<string, string> = {
+    append_to_response: "images,videos,credits,recommendations,release_dates,content_ratings"
+  };
+
+  try {
+    const data = await tmdbFetch<TmdbDetail>(path, params);
+
+    const title = mediaType === "movie" ? data.title ?? data.original_title : data.name ?? data.original_name;
+    const date = mediaType === "movie" ? data.release_date : data.first_air_date;
+
+    if (!title) return null;
+
+    const logo =
+      data.images?.logos?.find((item) => item.iso_639_1 === "en") ??
+      data.images?.logos?.find((item) => item.iso_639_1 === null) ??
+      data.images?.logos?.[0] ??
+      null;
+
+    const trailerKey =
+      data.videos?.results?.find((v) => v.site === "YouTube" && v.type === "Trailer" && v.official)?.key ??
+      data.videos?.results?.find((v) => v.site === "YouTube" && v.type === "Trailer")?.key ??
+      data.videos?.results?.find((v) => v.site === "YouTube")?.key ??
+      null;
+
+    let certification = "NR";
+    if (mediaType === "movie") {
+      const usRelease = data.release_dates?.results?.find((r) => r.iso_3166_1 === "US");
+      if (usRelease?.release_dates?.[0]?.certification) {
+        certification = usRelease.release_dates[0].certification;
+      }
+    } else {
+      const usRating = data.content_ratings?.results?.find((r) => r.iso_3166_1 === "US");
+      if (usRating?.rating) {
+        certification = usRating.rating;
+      }
+    }
+
+    const runtime = mediaType === "movie" ? data.runtime : data.episode_run_time?.[0] ?? null;
+
+    const recommendations = (data.recommendations?.results ?? [])
+      .map((item) => normalizeMedia(item, mediaType))
+      .filter(Boolean) as MediaSummary[];
+
+    return {
+      id: data.id,
+      mediaType,
+      title,
+      subtitle: mediaType === "movie" ? "Movie" : "Series",
+      overview: data.overview ?? "",
+      posterPath: data.poster_path ?? null,
+      backdropPath: data.backdrop_path ?? null,
+      logoPath: logo?.file_path ?? null,
+      trailerKey,
+      voteAverage: data.vote_average ?? 0,
+      year: date ? date.slice(0, 4) : "",
+      runtime: runtime ?? null,
+      certification,
+      genres: data.genres?.map((g) => g.name) ?? [],
+      genreIds: data.genres?.map((g: any) => g.id) ?? [],
+      cast: data.credits?.cast?.slice(0, 10).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        character: c.character,
+        profilePath: c.profile_path || null,
+      })) ?? [],
+      recommendations,
+      seasons: data.seasons?.map(s => ({
+        id: s.id,
+        name: s.name,
+        seasonNumber: s.season_number,
+        episodeCount: s.episode_count,
+      })) ?? [],
+      videos: (data.videos?.results ?? []).filter(v => v.site === "YouTube").map(v => ({
+        id: v.key,
+        key: v.key,
+        name: v.name || v.type,
+        site: v.site,
+        type: v.type,
+      })),
+      episodes: [] 
+    };
+  } catch (error) {
+    console.error("getMediaDetail error", error);
+    return null;
+  }
+}
+
+export async function getSeasonEpisodes(tvId: number, seasonNumber: number): Promise<Episode[]> {
+  try {
+    const data = await tmdbFetch<{ episodes: any[] }>(`/tv/${tvId}/season/${seasonNumber}`);
+    return (data.episodes ?? []).map(ep => ({
+      id: ep.id,
+      name: ep.name,
+      overview: ep.overview,
+      airDate: ep.air_date,
+      episodeNumber: ep.episode_number,
+      seasonNumber: ep.season_number,
+      runtime: ep.runtime,
+      stillPath: ep.still_path,
+    }));
+  } catch {
+    return [];
+  }
 }

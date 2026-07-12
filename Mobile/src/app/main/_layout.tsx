@@ -23,13 +23,14 @@ export default function MainLayout() {
           paddingTop: 8,
         },
         tabBarBackground: () => (
-          <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
+          <BlurView intensity={100} style={StyleSheet.absoluteFill} tint="dark" />
         ),
         tabBarActiveTintColor: colors.white,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarShowLabel: true,
         tabBarLabelStyle: {
-          fontFamily: 'Satoshi-Medium',
+          fontFamily: 'System',
+          fontWeight: '500',
           fontSize: 10,
           marginBottom: 10,
           marginTop: 6, // Increase space between icon and label
@@ -58,7 +59,7 @@ export default function MainLayout() {
         options={{
           title: 'Library',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'book-shelf-fill' : 'book-shelf-line'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'bookmark-fill' : 'bookmark-line'} color={color} focused={focused} />
           ),
         }}
       />

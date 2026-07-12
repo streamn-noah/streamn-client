@@ -50,7 +50,8 @@
           "microphonePermission": "Allow $(PRODUCTNAME) to access your microphone for voice features."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,
