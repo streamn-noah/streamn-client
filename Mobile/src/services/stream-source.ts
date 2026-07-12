@@ -75,6 +75,40 @@ export async function fetchStreamSources(
     }
   }
 
+  let wyzieSubtitles: SubtitleItem[] = [];
+  try {
+    const wyzieKey = process.env.EXPO_PUBLIC_WYZIE_API_KEY;
+    if (wyzieKey) {
+      const url = new URL("https://sub.wyzie.io/search");
+      url.searchParams.set("id", String(id));
+      url.searchParams.set("language", "en");
+      url.searchParams.set("key", wyzieKey);
+      
+      if (type === "tv") {
+        url.searchParams.set("season", String(season));
+        url.searchParams.set("episode", String(episode));
+      }
+
+      const res = await fetch(url.toString());
+      if (res.ok) {
+        const wyzieData = await res.json();
+        if (Array.isArray(wyzieData)) {
+          wyzieSubtitles = wyzieData.map((sub: any) => ({
+            url: sub.url,
+            format: sub.format || "vtt",
+            label: `Wyzie - ${sub.language || "English"}${sub.origin ? ` (${sub.origin})` : ""}`,
+            language: sub.language || "en",
+          }));
+        }
+      } else {
+        const errText = await res.text();
+        console.warn(`Wyzie 400: ${errText}`);
+      }
+    }
+  } catch (error) {
+    console.error("Wyzie subtitles fetch error:", error);
+  }
+
   try {
     // 1. Get media title/year from TMDB to pass to MovieBox
     const mediaDetail = await getMediaDetail(type, id);
@@ -96,7 +130,7 @@ export async function fetchStreamSources(
       : await getMovieBoxStreams(input);
 
     if (!response || !response.streams) {
-      return { sources: [], subtitles: [] };
+      return { sources: [], subtitles: wyzieSubtitles };
     }
 
     // 3. Map MovieBoxStream to our SourceItem
@@ -111,18 +145,25 @@ export async function fetchStreamSources(
 
     // Subtitles mapping
     let subtitles: SubtitleItem[] = [];
+    const seenSubUrls = new Set<string>();
+
     response.streams.forEach(stream => {
       if (stream.captions) {
         stream.captions.forEach(caption => {
-          subtitles.push({
-            url: caption.url,
-            label: caption.language,
-            language: caption.language_code,
-            format: 'vtt',
-          });
+          if (caption.url && !seenSubUrls.has(caption.url)) {
+            seenSubUrls.add(caption.url);
+            subtitles.push({
+              url: caption.url,
+              label: caption.language,
+              language: caption.language_code,
+              format: 'vtt',
+            });
+          }
         });
       }
     });
+
+    subtitles.push(...wyzieSubtitles);
 
     const data: StreamBackendResponse = {
       sources,
@@ -135,7 +176,7 @@ export async function fetchStreamSources(
     console.error("Error fetching stream sources:", error);
     return {
       sources: [],
-      subtitles: [],
+      subtitles: wyzieSubtitles,
     };
   }
 }

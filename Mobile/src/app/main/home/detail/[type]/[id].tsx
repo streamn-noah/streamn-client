@@ -147,7 +147,7 @@ export default function MediaDetailModal() {
     setShowSeasonPicker(false);
     setSelectedSeason(seasonNum);
 
-    const alreadyLoaded = detail.episodes.some(ep => ep.seasonNumber === seasonNum);
+    const alreadyLoaded = detail.episodes.some((ep: any) => ep.seasonNumber === seasonNum);
     let newEps = detail.episodes;
     if (!alreadyLoaded) {
       const eps = await getSeasonEpisodes(detail.id, seasonNum);
@@ -155,11 +155,11 @@ export default function MediaDetailModal() {
         if (a.seasonNumber !== b.seasonNumber) return a.seasonNumber - b.seasonNumber;
         return a.episodeNumber - b.episodeNumber;
       });
-      setDetail(prev => prev ? { ...prev, episodes: newEps } : prev);
+      setDetail((prev: any) => prev ? { ...prev, episodes: newEps } : prev);
     }
 
     setTimeout(() => {
-      const index = newEps.findIndex(ep => ep.seasonNumber === seasonNum);
+      const index = newEps.findIndex((ep: any) => ep.seasonNumber === seasonNum);
       if (index >= 0 && flatListRef.current) {
         flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0 });
       }
@@ -168,11 +168,11 @@ export default function MediaDetailModal() {
 
   const loadNextSeason = async () => {
     if (!detail || !detail.seasons || detail.episodes.length === 0) return;
-    const currentMaxSeason = Math.max(...detail.episodes.map(ep => ep.seasonNumber));
-    const nextSeasonObj = detail.seasons.find(s => s.seasonNumber > currentMaxSeason);
+    const currentMaxSeason = Math.max(...detail.episodes.map((ep: any) => ep.seasonNumber));
+    const nextSeasonObj = detail.seasons.find((s: any) => s.seasonNumber > currentMaxSeason);
     if (nextSeasonObj) {
       const moreEps = await getSeasonEpisodes(detail.id, nextSeasonObj.seasonNumber);
-      setDetail(prev => prev ? { ...prev, episodes: [...prev.episodes, ...moreEps] } : prev);
+      setDetail((prev: any) => prev ? { ...prev, episodes: [...prev.episodes, ...moreEps] } : prev);
     }
   };
 
@@ -248,7 +248,7 @@ export default function MediaDetailModal() {
     setSources([]);
 
     fetchStreamSources(detail.mediaType, detail.id, 1, 1, false, "download")
-      .then((res) => {
+      .then((res: any) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {
           setSources(res.sources);
@@ -471,7 +471,7 @@ export default function MediaDetailModal() {
                   <Text style={[styles.aboutGenres, { marginBottom: 0, marginLeft: 6, color: '#4ade80' }]}>TV SERIES</Text>
                 </View>
                 <Text style={[styles.aboutOverview, { marginTop: 12 }]}>
-                  {detail.title} has {detail.seasons.length} season(s) and a total of {detail.seasons.reduce((acc, s) => acc + s.episodeCount, 0)} episodes.
+                  {detail.title} has {detail.seasons.length} season(s) and a total of {detail.seasons.reduce((acc: number, s: any) => acc + s.episodeCount, 0)} episodes.
                 </Text>
               </View>
             )}
@@ -494,12 +494,12 @@ export default function MediaDetailModal() {
               horizontal
               showsHorizontalScrollIndicator={false}
               data={detail.episodes}
-              keyExtractor={ep => `${ep.seasonNumber}-${ep.id}`}
+              keyExtractor={(ep: any) => `${ep.seasonNumber}-${ep.id}`}
               onEndReached={loadNextSeason}
               onEndReachedThreshold={0.5}
               viewabilityConfig={viewabilityConfig}
               onViewableItemsChanged={onViewableItemsChanged}
-              renderItem={({ item: ep }) => (
+              renderItem={({ item: ep }: { item: any }) => (
                 <EpisodeCardItem 
                   ep={ep} 
                   handleDownloadEpisode={handleDownloadEpisode} 
@@ -518,7 +518,7 @@ export default function MediaDetailModal() {
               <Icon name="arrow-right-s-line" size={24} color="#fff" style={{ marginTop: 2 }} />
             </TouchableOpacity>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {detail.videos.slice(0, 5).map((vid) => (
+              {detail.videos.slice(0, 5).map((vid: any) => (
                 <TrailerCardItem key={vid.id} vid={vid} onPress={() => handlePlayTrailer(vid.key)} />
               ))}
             </ScrollView>
@@ -543,7 +543,7 @@ export default function MediaDetailModal() {
           <View style={styles.seasonPickerContainer}>
             <Text style={styles.seasonPickerTitle}>Seasons</Text>
             <ScrollView style={{ maxHeight: height * 0.5 }}>
-              {detail.seasons?.map((s) => (
+              {detail.seasons?.map((s: any) => (
                 <TouchableOpacity
                   key={s.id}
                   style={[styles.seasonPickerItem, selectedSeason === s.seasonNumber && styles.seasonPickerItemActive]}

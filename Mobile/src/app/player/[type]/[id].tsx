@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
 import CustomPlayer from '@/components/streamn/custom-player';
@@ -73,6 +73,7 @@ export default function PlayerScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
       <CustomPlayer
         mediaType={type as MediaType}
         mediaId={Number(id)}
