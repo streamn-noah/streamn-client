@@ -262,3 +262,49 @@ export async function getMovieBoxDownloadSources(
     return null;
   }
 }
+
+export async function getMovieBoxSeasonDownloadSources(
+  input: MovieBoxLookupInput,
+): Promise<{ title: string; subjectId: string; episodes: { episode: number; streams: MovieBoxStream[] }[] } | null> {
+  if (!WORKER_URL) {
+    console.warn("MOVIEBOX_API_URL environment variable is not defined");
+    return null;
+  }
+
+  if (input.type === "movie") return null;
+
+  try {
+    const match = await resolveMovieBoxMatch(input);
+    if (!match) return null;
+
+    const cachedPack = downloadPackCache.get(match.subjectId);
+    const pack =
+      cachedPack && Date.now() - cachedPack.timestamp < DOWNLOAD_PACK_TTL_MS
+        ? cachedPack.pack
+        : await fetchMovieBoxJson<MovieBoxDownloadPack>(`/download/${match.subjectId}`);
+
+    if (pack) {
+      downloadPackCache.set(match.subjectId, {
+        pack,
+        timestamp: Date.now(),
+      });
+    }
+
+    const seasonEntry = pack?.seasons?.find((entry) => entry.season === (input.season ?? 1));
+    if (!seasonEntry || !seasonEntry.episodes) return null;
+
+    const episodes = seasonEntry.episodes.map(ep => ({
+      episode: ep.episode,
+      streams: sortStreamsByQuality(ep.qualities ?? ep.streams ?? [])
+    }));
+
+    return {
+      title: match.title,
+      subjectId: match.subjectId,
+      episodes,
+    };
+  } catch (error) {
+    console.error("Error in getMovieBoxSeasonDownloadSources:", error);
+    return null;
+  }
+}

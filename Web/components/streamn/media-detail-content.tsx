@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -30,7 +32,7 @@ import { WatchlistPicker } from "@/components/streamn/watchlist-picker";
 import { WatchPartyInviteModal } from "@/components/streamn/watch-party-invite-modal";
 import type { Episode, MediaDetail, MediaSummary } from "@/lib/media";
 import { cinesrcUrl, tmdbImage } from "@/lib/media";
-import { fetchStreamSources } from "@/lib/stream-source";
+import { fetchStreamSources, fetchSeasonDownloadSources, type SeasonDownloadResponse, type SourceItem } from "@/lib/stream-source";
 import { getWatchProgress, watchHref } from "@/lib/streamn-storage";
 import { getLikedIds, likeMedia, unlikeMedia } from "@/lib/user-actions";
 import { useLowDataMode } from "@/components/providers/low-data-provider";
@@ -75,10 +77,12 @@ function Episodes({
   initialEpisodes,
   mediaId,
   seasons,
+  modalContainer,
 }: {
   initialEpisodes: Episode[];
   mediaId: number;
   seasons: MediaDetail["seasons"];
+  modalContainer: HTMLElement | null;
 }) {
   const { isLowDataMode } = useLowDataMode();
   const filterAired = (eps: Episode[]) => {
@@ -99,6 +103,63 @@ function Episodes({
     initialEpisodes[0]?.seasonNumber ?? seasons[0]?.seasonNumber ?? 1,
   );
   const [loadingSeason, setLoadingSeason] = useState(false);
+
+  // Season Download states
+  const [seasonDownloadModalOpen, setSeasonDownloadModalOpen] = useState(false);
+  const [seasonDownloadData, setSeasonDownloadData] = useState<SeasonDownloadResponse | null>(null);
+  const [loadingSeasonDownload, setLoadingSeasonDownload] = useState(false);
+  const [selectedQuality, setSelectedQuality] = useState<string>("1080p");
+
+  const availableQualities = useMemo(() => {
+    if (!seasonDownloadData?.episodes) return [];
+    const qualities = new Set<string>();
+    for (const ep of seasonDownloadData.episodes) {
+      for (const src of ep.sources) {
+        if (src.quality) qualities.add(src.quality);
+      }
+    }
+    return Array.from(qualities).sort((a, b) => parseInt(b) - parseInt(a));
+  }, [seasonDownloadData]);
+
+  useEffect(() => {
+    if (availableQualities.length > 0 && !availableQualities.includes(selectedQuality)) {
+      setSelectedQuality(availableQualities[0]);
+    }
+  }, [availableQualities, selectedQuality]);
+
+  const filteredEpisodes = useMemo(() => {
+    if (!seasonDownloadData?.episodes) return [];
+    return seasonDownloadData.episodes.map(ep => {
+      let source = ep.sources.find(s => s.quality === selectedQuality);
+      if (!source && ep.sources.length > 0) source = ep.sources[0];
+      return {
+        ...ep,
+        selectedSource: source
+      };
+    });
+  }, [seasonDownloadData, selectedQuality]);
+
+  const totalSizeMB = useMemo(() => {
+    let total = 0;
+    for (const ep of filteredEpisodes) {
+      const sizeStr = ep.selectedSource?.size;
+      if (sizeStr) {
+        const num = parseFloat(sizeStr);
+        if (!isNaN(num)) {
+          if (sizeStr.toUpperCase().includes("GB")) {
+            total += num * 1024;
+          } else {
+            total += num;
+          }
+        }
+      }
+    }
+    return total;
+  }, [filteredEpisodes]);
+
+  const totalSizeLabel = totalSizeMB > 0
+    ? (totalSizeMB > 1024 ? `${(totalSizeMB / 1024).toFixed(2)} GB` : `${totalSizeMB.toFixed(0)} MB`)
+    : "Unknown Size";
 
   // Episode Download states
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
@@ -147,29 +208,110 @@ function Episodes({
     }
   }
 
+  const handleSeasonDownloadClick = async () => {
+    setSeasonDownloadModalOpen(true);
+    setLoadingSeasonDownload(true);
+    setSeasonDownloadData(null);
+    try {
+      const res = await fetchSeasonDownloadSources("tv", mediaId, selectedSeason);
+      setSeasonDownloadData(res);
+    } catch (err) {
+      console.error("Failed to fetch season downloads:", err);
+    } finally {
+      setLoadingSeasonDownload(false);
+    }
+  };
+
+  const handleCopyLinks = () => {
+    if (!filteredEpisodes.length) return;
+    const links = filteredEpisodes
+      .map((ep) => ep.selectedSource?.url)
+      .filter(Boolean)
+      .join("\n");
+    navigator.clipboard.writeText(links).then(() => {
+      alert("Links copied to clipboard!");
+    });
+  };
+
+  const handleDownloadAll = async () => {
+    if (!filteredEpisodes.length) return;
+    const links = filteredEpisodes
+      .map((ep) => ep.selectedSource?.url)
+      .filter(Boolean);
+
+    if (links.length === 0) return;
+
+    // Staggered trigger to avoid extreme browser blocking (though still may prompt)
+    for (let i = 0; i < links.length; i++) {
+      const url = links[i];
+      if (url) {
+        setTimeout(() => {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = '';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }, i * 500); // 500ms delay between each download
+      }
+    }
+  };
+
+  const handleDownloadTxt = () => {
+    if (!filteredEpisodes.length) return;
+    const links = filteredEpisodes
+      .map((ep) => ep.selectedSource?.url)
+      .filter(Boolean)
+      .join("\n");
+
+    if (!links) return;
+
+    const blob = new Blob([links], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `season_${selectedSeason}_links.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const visibleEpisodes = episodes.slice(0, visibleCount);
   const hasMore = episodes.length > visibleCount;
 
   return (
     <div>
-      <div className='mb-4 flex items-center justify-between gap-4'>
+      <div className='mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
         <h3 className='section-title mb-0'>Episodes</h3>
-        <label className='season-select-wrap'>
-          <span className='sr-only'>Choose season</span>
-          <select
-            className='season-select'
-            disabled={loadingSeason}
-            onChange={(event) => changeSeason(Number(event.target.value))}
-            value={selectedSeason}
+        <div className="flex items-center gap-3">
+          <label className='season-select-wrap'>
+            <span className='sr-only'>Choose season</span>
+            <select
+              className='season-select'
+              disabled={loadingSeason}
+              onChange={(event) => changeSeason(Number(event.target.value))}
+              value={selectedSeason}
+            >
+              {seasons.map((season) => (
+                <option key={season.id} value={season.seasonNumber}>
+                  {season.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className='pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/55' />
+          </label>
+
+          <button
+            onClick={handleSeasonDownloadClick}
+            className="flex items-center gap-2 rounded-full bg-white text-black px-4 py-2 text-sm font-bold shadow-xl transition hover:bg-white/90 cursor-pointer whitespace-nowrap"
+            title="Download Entire Season"
           >
-            {seasons.map((season) => (
-              <option key={season.id} value={season.seasonNumber}>
-                {season.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className='pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/55' />
-        </label>
+            <Download className="size-4" />
+            <span className="hidden sm:inline">Download Season</span>
+            <span className="sm:hidden">Season</span>
+          </button>
+        </div>
       </div>
       <div
         className={`episode-list overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] ${loadingSeason ? "opacity-55" : ""}`}
@@ -249,7 +391,7 @@ function Episodes({
       ) : null}
 
       {/* Episode Download Modal */}
-      {downloadModalOpen && downloadEpisode && (
+      {downloadModalOpen && downloadEpisode && modalContainer && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
           onClick={() => setDownloadModalOpen(false)}
@@ -308,7 +450,110 @@ function Episodes({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        modalContainer
+      )}
+
+      {/* Season Batch Download Modal */}
+      {seasonDownloadModalOpen && modalContainer && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          onClick={() => setSeasonDownloadModalOpen(false)}
+        >
+          <div
+            className="relative max-w-lg w-full bg-neutral-900 border border-white/10 rounded-2xl p-6 shadow-2xl text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setSeasonDownloadModalOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition cursor-pointer"
+              title="Close"
+            >
+              <X className="size-5" />
+            </button>
+            <div className="flex items-center justify-between mb-1 pr-12">
+              <h3 className="text-xl font-bold text-white">Download Season {selectedSeason}</h3>
+            </div>
+            <p className="text-sm text-white/60 mb-6 font-medium">
+              Get all episodes for this season in one go. Approx size: <span className="text-white font-bold">{totalSizeLabel}</span>
+            </p>
+
+            <div className="space-y-4">
+              {loadingSeasonDownload ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="size-8 animate-spin text-white/60" />
+                  <p className="text-sm text-white/50">Fetching season links...</p>
+                </div>
+              ) : filteredEpisodes.length > 0 ? (
+                <>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* <button
+                      onClick={handleDownloadAll}
+                      className="flex-1 flex items-center justify-center gap-2 bg-white text-black font-bold py-3 rounded-xl hover:bg-white/90 transition shadow-lg"
+                    >
+                      <span>Download Now</span>
+                    </button> */}
+                    <button
+                      onClick={handleCopyLinks}
+                      className="flex-1 flex items-center justify-center gap-2 bg-white text-black font-bold py-3 rounded-xl hover:bg-white/90 transition shadow-lg"
+                    >
+                      <span className="truncate">Copy Links (IDM)</span>
+                    </button>
+                    <button
+                      onClick={handleDownloadTxt}
+                      className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold py-3 rounded-xl transition"
+                    >
+                      <span className="truncate">Save as .txt</span>
+                    </button>
+                  </div>
+
+                  <div className="mt-4 bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-white/70 leading-relaxed">
+                    <span className="text-white font-bold block mb-1">How to download sequentially:</span>
+                    Omo i still dey work on the auto qeue download feature. For now just use a download manager. Copy the links above and paste them into <span className="text-white/90 font-semibold">Internet Download Manager (IDM)</span>, or save the <span className="text-white/90 font-semibold">.txt</span> file and import it into <span className="text-white/90 font-semibold">JDownloader</span>.
+                  </div>
+
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-0">
+                        Included Episodes ({filteredEpisodes.length})
+                      </h4>
+                      {availableQualities.length > 0 && (
+                        <select
+                          value={selectedQuality}
+                          onChange={(e) => setSelectedQuality(e.target.value)}
+                          className="bg-white/10 border border-white/20 text-white rounded-lg px-2 py-1 text-xs outline-none cursor-pointer relative z-10"
+                        >
+                          {availableQualities.map(q => (
+                            <option key={q} value={q} className="bg-neutral-900 text-white">{q}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 no-scrollbar">
+                      {filteredEpisodes.map((ep) => (
+                        <div key={ep.episode} className="flex items-center justify-between bg-white/[0.03] border border-white/5 rounded-lg p-3">
+                          <div className="font-semibold text-sm">Episode {ep.episode}</div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-white/40 font-medium">{ep.selectedSource?.size || "Unknown"}</span>
+                            <div className="text-xs text-white/80 bg-white/10 px-2 py-1 rounded font-bold">
+                              {ep.selectedSource?.quality || "Default"}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8 text-white/40 text-sm flex flex-col items-center gap-2">
+                  <AlertCircle className="size-8 text-white/20" />
+                  <span>No batch download links available for this season.</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        modalContainer
       )}
     </div>
   );
@@ -331,6 +576,7 @@ export function MediaDetailContent({
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(true);
   const [isDescriptionVisible, setIsDescriptionVisible] = useState(true);
   const [isWatchPartyModalOpen, setIsWatchPartyModalOpen] = useState(false);
+  const [modalContainer, setModalContainer] = useState<HTMLElement | null>(null);
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const startHideTimer = () => {
@@ -590,35 +836,23 @@ export function MediaDetailContent({
                 </Link>
               )}
 
-              {sources.length > 0 && (
-                <button
-                  onClick={() => setDownloadModalOpen(true)}
-                  className='group relative flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl border border-white/10'
-                  type='button'
-                >
-                  <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
-                    <Download className='size-3.5' />
-                  </div>
-                  <div className='flex flex-col text-left'>
-                    <span className='text-sm font-black leading-none'>Download</span>
-                    <span className='text-[10px] font-bold text-white/55 uppercase tracking-wider mt-0.5'>
-                      {sources.length} links
-                    </span>
-                  </div>
-                </button>
-              )}
+              <button
+                onClick={() => setIsWatchPartyModalOpen(true)}
+                className='group relative flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl border border-white/10'
+                type='button'
+              >
+                <div className='w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
+                  <PartyPopper className='size-3.5' />
+                </div>
+                <div className='flex flex-col text-left'>
+                  <span className='text-sm font-black leading-none'>Watch 2gether</span>
+                  <span className='text-[10px] font-bold text-white/55 uppercase tracking-wider mt-0.5'>
+                    Invite Friends
+                  </span>
+                </div>
+              </button>
 
               <WatchlistPicker iconOnly item={detail} menuPosition='up' />
-
-              <button
-                aria-label="Create Watch Party"
-                className="w-11 h-11 rounded-full border bg-white/10 hover:bg-white/20 text-white border-white/20 flex items-center justify-center transition-all"
-                onClick={() => setIsWatchPartyModalOpen(true)}
-                type='button'
-                title="Create Watch Party"
-              >
-                <PartyPopper className="size-5" />
-              </button>
 
               <button
                 aria-label={liked ? "Unlike" : "Like"}
@@ -632,6 +866,17 @@ export function MediaDetailContent({
               >
                 <ThumbsUp className={`size-5 ${liked ? "fill-current" : ""}`} />
               </button>
+
+              {sources.length > 0 && (
+                <button
+                  onClick={() => setDownloadModalOpen(true)}
+                  className='w-11 h-11 rounded-full border bg-white/10 hover:bg-white/20 text-white border-white/20 flex items-center justify-center transition-all'
+                  type='button'
+                  title="Download Episode"
+                >
+                  <Download className='size-5' />
+                </button>
+              )}
             </div>
           </div>
 
@@ -682,6 +927,7 @@ export function MediaDetailContent({
               initialEpisodes={detail.episodes}
               mediaId={detail.id}
               seasons={detail.seasons}
+              modalContainer={modalContainer}
             />
           ) : null}
 
@@ -716,6 +962,8 @@ export function MediaDetailContent({
           ) : null}
         </section>
       </div>
+
+      <div ref={setModalContainer} className="relative z-[200]" />
 
       {downloadModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4" onClick={() => setDownloadModalOpen(false)}>

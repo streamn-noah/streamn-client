@@ -150,3 +150,46 @@ export function getCachedStreamSources(
   }
   return null;
 }
+
+export type SeasonDownloadResponse = {
+  responseId?: string;
+  expiresAt?: string;
+  episodes: Array<{
+    episode: number;
+    sources: SourceItem[];
+  }>;
+};
+
+export async function fetchSeasonDownloadSources(
+  type: "movie" | "tv",
+  id: number,
+  season = 1,
+): Promise<SeasonDownloadResponse> {
+  const queryParams = new URLSearchParams({
+    type,
+    id: String(id),
+    season: String(season),
+  });
+
+  const endpoint = `/api/season-download?${queryParams.toString()}`;
+
+  try {
+    const res = await fetch(endpoint, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch season download sources: ${res.statusText}`);
+    }
+
+    const data: SeasonDownloadResponse = await res.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching season download sources:", error);
+    return {
+      episodes: [],
+    };
+  }
+}

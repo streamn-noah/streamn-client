@@ -134,7 +134,18 @@ export async function fetchStreamSources(
     }
 
     // 3. Map MovieBoxStream to our SourceItem
-    const sources: SourceItem[] = response.streams.map((stream) => ({
+    const sources: SourceItem[] = response.streams
+      .filter((stream: any) => {
+        const fmt = (stream.format || '').toLowerCase();
+        const qual = (String(stream.quality) || '').toLowerCase();
+        const urlStr = (stream.url || '').toLowerCase();
+        const codec = (stream.codecName || '').toLowerCase();
+        return !fmt.includes('265') && !fmt.includes('hevc') &&
+               !qual.includes('265') && !qual.includes('hevc') &&
+               !urlStr.includes('h265') && !urlStr.includes('hevc') &&
+               !codec.includes('265') && !codec.includes('hevc');
+      })
+      .map((stream) => ({
       url: stream.url,
       quality: stream.quality,
       type: stream.format || 'mp4',

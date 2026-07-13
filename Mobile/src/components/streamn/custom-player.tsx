@@ -12,7 +12,7 @@ import {
   Modal,
   AppState,
 } from 'react-native';
-import { VLCPlayer } from 'react-native-vlc-media-player';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { BlurView } from 'expo-blur';
 import Icon from 'react-native-remix-icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -148,15 +148,11 @@ export default function CustomPlayer({
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [bufferPercent, setBufferPercent] = useState(0);
   const [progressWidth, setProgressWidth] = useState(0);
   const [volumeWidth, setVolumeWidth] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
-
-  const vlcRef = useRef<any>(null);
 
   const [introDbSegments, setIntroDbSegments] = useState<IntroDbMediaRecord | null>(null);
   const [hasSkippedMovieCredits, setHasSkippedMovieCredits] = useState(false);
@@ -234,23 +230,60 @@ export default function CustomPlayer({
 
     return {
       uri: activeSource.url,
-      initOptions: [
-        '--network-caching=1500',
-      ],
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+        "Accept": "video/mp4,video/*;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
     };
   }, [activeSource]);
 
+  const player = useVideoPlayer(videoSource, (player) => {
+    player.play();
+  });
+
+  useEffect(() => {
+    if (!player) return;
+
+    const timeUpdateSub = player.addListener('timeUpdate', (e) => {
+      setCurrentTime(e.currentTime);
+      setDuration(player.duration || 0);
+    });
+
+    const statusSub = player.addListener('statusChange', (e) => {
+      if (e.status === 'readyToPlay') {
+        setIsBuffering(false);
+        setDuration(player.duration || 0);
+      } else if (e.status === 'loading') {
+        setIsBuffering(true);
+      } else if (e.status === 'error') {
+        tryNextSource();
+      }
+    });
+
+    const playingSub = player.addListener('playingChange', (e) => {
+      setIsPlaying(e.isPlaying);
+      if (e.isPlaying) setIsBuffering(false);
+    });
+
+    return () => {
+      timeUpdateSub.remove();
+      statusSub.remove();
+      playingSub.remove();
+    };
+  }, [player, tryNextSource]);
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') {
-        setIsPlaying(false);
+      if (state !== 'active' && player) {
+        try { player.pause(); } catch (e) {}
       }
     });
     return () => {
       sub.remove();
-      setIsPlaying(false);
+      try { player?.pause(); } catch (e) {}
     };
-  }, []);
+  }, [player]);
 
   useEffect(() => {
     const fetchVtt = async () => {
@@ -297,7 +330,7 @@ export default function CustomPlayer({
   }, [activeSkipSegment, skipButtonOpacity]);
 
   const handleSkipSegment = () => {
-    if (!introDbSegments || !activeSkipSegment) return;
+    if (!introDbSegments || !activeSkipSegment || !player) return;
     const allSegments = [
       ...introDbSegments.intro.map(s => ({ ...s, type: 'Skip Intro' })),
       ...introDbSegments.recap.map(s => ({ ...s, type: 'Skip Recap' })),
@@ -307,7 +340,7 @@ export default function CustomPlayer({
       const match = findActiveSegment([seg], currentTime, duration);
       if (match && seg.endMs) {
         const target = seg.endMs / 1000;
-        if (vlcRef.current) vlcRef.current.seek(target / duration);
+        Object.assign(player, { currentTime: target });
         if (mediaType === 'movie' && seg.type === 'Skip Credits') {
           setHasSkippedMovieCredits(true);
         }
@@ -359,13 +392,16 @@ export default function CustomPlayer({
   }, [isBuffering, isPlaying]);
 
   const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+    if (!player) return;
+    if (isPlaying) player.pause();
+    else player.play();
     resetHideTimer();
   };
 
   const handleSkip = (seconds: number) => {
+    if (!player) return;
     const target = Math.max(0, Math.min(currentTime + seconds, duration));
-    if (vlcRef.current) vlcRef.current.seek(target / duration);
+    Object.assign(player, { currentTime: target });
     resetHideTimer();
   };
 
@@ -394,27 +430,13 @@ export default function CustomPlayer({
 
   return (
     <View style={styles.container}>
-      <VLCPlayer
-        ref={vlcRef}
+      <VideoView
         style={{ width: '100%', height: '100%', position: 'absolute' }}
-        source={videoSource}
-        paused={!isPlaying}
-        muted={isMuted}
-        volume={volume * 100}
-        rate={playbackSpeed}
-        onProgress={(e: any) => {
-          if (e.currentTime > 0) setCurrentTime(e.currentTime / 1000);
-          if (e.duration > 0) setDuration(e.duration / 1000);
-        }}
-        onPlaying={() => {
-          setIsPlaying(true);
-          setIsBuffering(false);
-        }}
-        onPaused={() => setIsPlaying(false)}
-        onBuffering={(e: any) => {
-          setIsBuffering(e.isBuffering);
-        }}
-        onError={() => tryNextSource()}
+        player={player}
+        allowsFullscreen={false}
+        allowsPictureInPicture={false}
+        nativeControls={false}
+        contentFit="contain"
       />
 
       {activeCue && (
@@ -453,30 +475,30 @@ export default function CustomPlayer({
           </View>
           <View style={styles.topBarRight}>
             <View style={[styles.glassPill, { paddingHorizontal: 12 }]}>
-              <TouchableOpacity onPress={() => setIsMuted(!isMuted)} activeOpacity={0.8}>
-                <Icon name={isMuted ? "volume-mute-line" : "volume-up-line"} size={20} color="#fff" />
+              <TouchableOpacity onPress={() => { if(player) player.muted = !player.muted; }} activeOpacity={0.8}>
+                <Icon name={player?.muted ? "volume-mute-line" : "volume-up-line"} size={20} color="#fff" />
               </TouchableOpacity>
               <View 
                 style={styles.volumeTrack}
                 onLayout={(e) => setVolumeWidth(e.nativeEvent.layout.width)}
                 onStartShouldSetResponder={() => true}
                 onResponderMove={(e) => {
-                  if (volumeWidth > 0) {
+                  if (volumeWidth > 0 && player) {
                     const vol = Math.max(0, Math.min(1, e.nativeEvent.locationX / volumeWidth));
-                    setVolume(vol);
-                    setIsMuted(vol === 0);
+                    player.volume = vol;
+                    player.muted = vol === 0;
                   }
                 }}
                 onResponderRelease={(e) => {
-                  if (volumeWidth > 0) {
+                  if (volumeWidth > 0 && player) {
                     const vol = Math.max(0, Math.min(1, e.nativeEvent.locationX / volumeWidth));
-                    setVolume(vol);
-                    setIsMuted(vol === 0);
+                    player.volume = vol;
+                    player.muted = vol === 0;
                   }
                 }}
               >
-                <View style={[styles.volumeFill, { width: isMuted ? '0%' : `${volume * 100}%` }]} />
-                <View style={[styles.volumeThumb, { left: isMuted ? '0%' : `${volume * 100}%` }]} />
+                <View style={[styles.volumeFill, { width: player?.muted ? '0%' : `${(player?.volume || 1) * 100}%` }]} />
+                <View style={[styles.volumeThumb, { left: player?.muted ? '0%' : `${(player?.volume || 1) * 100}%` }]} />
               </View>
             </View>
           </View>
@@ -572,16 +594,16 @@ export default function CustomPlayer({
                   onStartShouldSetResponder={() => true}
                   onResponderMove={(e) => {
                     const locX = e.nativeEvent.locationX;
-                    if (progressWidth > 0) {
+                    if (progressWidth > 0 && player) {
                       const percent = Math.max(0, Math.min(1, locX / progressWidth));
-                      if (vlcRef.current) vlcRef.current.seek(percent);
+                      Object.assign(player, { currentTime: percent * duration });
                     }
                   }}
                   onResponderRelease={(e) => {
                     const locX = e.nativeEvent.locationX;
-                    if (progressWidth > 0) {
+                    if (progressWidth > 0 && player) {
                       const percent = Math.max(0, Math.min(1, locX / progressWidth));
-                      if (vlcRef.current) vlcRef.current.seek(percent);
+                      Object.assign(player, { currentTime: percent * duration });
                     }
                   }}
                 >
@@ -640,6 +662,7 @@ export default function CustomPlayer({
                           style={[styles.modalOption, playbackSpeed === speed && styles.modalOptionActive]}
                           onPress={() => {
                             setPlaybackSpeed(speed);
+                            if (player) player.playbackRate = speed;
                             setActiveMenu(null);
                           }}
                         >
