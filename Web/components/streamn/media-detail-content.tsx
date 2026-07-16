@@ -4,8 +4,7 @@ import { createPortal } from "react-dom";
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  AlertCircle,
+import { Search, ArrowDownUp, AlertCircle,
   ChevronDown,
   Download,
   Film,
@@ -13,20 +12,17 @@ import {
   PartyPopper,
   Pause,
   Play,
+  Share2,
   Star,
   ThumbsUp,
   Users,
   Volume2,
   VolumeX,
   X,
-} from "lucide-react";
+ } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
-import {
-  DetailBackdropPlayer,
-  type DetailBackdropPlayerHandle,
-} from "@/components/streamn/detail-backdrop-player";
 import { IframePlayer } from "@/components/streamn/iframe-player";
 import { WatchlistPicker } from "@/components/streamn/watchlist-picker";
 import { WatchPartyInviteModal } from "@/components/streamn/watch-party-invite-modal";
@@ -99,6 +95,8 @@ function Episodes({
 
   const [episodes, setEpisodes] = useState(() => filterAired(initialEpisodes));
   const [visibleCount, setVisibleCount] = useState(8);
+  const [expandedEpisode, setExpandedEpisode] = useState<number | null>(null);
+  const [searchEpisode, setSearchEpisode] = useState('');
   const [selectedSeason, setSelectedSeason] = useState(
     initialEpisodes[0]?.seasonNumber ?? seasons[0]?.seasonNumber ?? 1,
   );
@@ -277,8 +275,11 @@ function Episodes({
     URL.revokeObjectURL(url);
   };
 
-  const visibleEpisodes = episodes.slice(0, visibleCount);
-  const hasMore = episodes.length > visibleCount;
+  const searchFilteredEpisodes = searchEpisode.trim() 
+    ? episodes.filter(ep => ep.name.toLowerCase().includes(searchEpisode.toLowerCase()) || (ep.overview && ep.overview.toLowerCase().includes(searchEpisode.toLowerCase())))
+    : episodes;
+  const visibleEpisodes = searchFilteredEpisodes.slice(0, visibleCount);
+  const hasMore = searchFilteredEpisodes.length > visibleCount;
 
   return (
     <div>
@@ -314,71 +315,99 @@ function Episodes({
         </div>
       </div>
       <div
-        className={`episode-list overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] ${loadingSeason ? "opacity-55" : ""}`}
+        className={`episode-list flex flex-col gap-3 ${loadingSeason ? "opacity-55" : ""}`}
       >
-        {visibleEpisodes.map((episode) => (
-          <Link
-            className='group block border-b border-white/8 p-4 transition-colors hover:bg-white/[0.05] last:border-b-0'
-            href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
-            key={episode.id}
-          >
-            <div className='flex flex-col gap-3 md:flex-row md:items-center md:gap-5'>
-              <div className='flex min-w-0 flex-1 items-start gap-4 md:items-center'>
-                <span className='flex size-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg font-black text-white/55'>
-                  {episode.episodeNumber}
-                </span>
+        {visibleEpisodes.map((episode) => {
+          const isExpanded = expandedEpisode === episode.id;
+          return (
+            <div
+              className='group block border-b border-white/8 p-4 transition-colors hover:bg-white/[0.05] last:border-b-0 cursor-pointer'
+              key={episode.id}
+              onClick={() => {
+                setExpandedEpisode(isExpanded ? null : episode.id);
+              }}
+            >
+              <div className='flex flex-col md:flex-row md:items-center md:gap-5'>
+                <div className='flex min-w-0 flex-1 items-start gap-4 md:items-center'>
+                  <span className='flex size-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg font-black text-white/55'>
+                    {episode.episodeNumber}
+                  </span>
 
-                <span className='relative aspect-video w-24 shrink-0 overflow-hidden rounded-xl bg-white/8 md:w-44'>
-                  {episode.stillPath ? (
-                    <Image
-                      src={tmdbImage(episode.stillPath, isLowDataMode ? "w200" : "w300")}
-                      alt=''
-                      fill
-                      sizes='(max-width: 768px) 96px, 176px'
-                      loading={isLowDataMode ? "lazy" : undefined}
-                      quality={isLowDataMode ? 60 : 75}
-                      className='object-cover transition-transform duration-300 group-hover:scale-[1.03]'
-                    />
-                  ) : (
-                    <span className='flex h-full w-full items-center justify-center bg-white/[0.02] text-white/25'>
-                      <Film className='size-5' />
+                  <Link 
+                    href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
+                    className='relative aspect-video w-24 shrink-0 overflow-hidden rounded-xl bg-white/8 md:w-44 block'
+                  >
+                    {episode.stillPath ? (
+                      <Image
+                        src={tmdbImage(episode.stillPath, isLowDataMode ? "w200" : "w300")}
+                        alt=''
+                        fill
+                        sizes='(max-width: 768px) 96px, 176px'
+                        loading={isLowDataMode ? "lazy" : undefined}
+                        quality={isLowDataMode ? 60 : 75}
+                        className='object-cover transition-transform duration-300 group-hover:scale-[1.03]'
+                      />
+                    ) : (
+                      <span className='flex h-full w-full items-center justify-center bg-white/[0.02] text-white/25'>
+                        <Film className='size-5' />
+                      </span>
+                    )}
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Play className="size-6 text-white fill-current drop-shadow-md" />
+                    </div>
+                  </Link>
+
+                  <span className='min-w-0 flex-1'>
+                    <span className='flex items-center justify-between md:justify-start'>
+                      <Link 
+                        href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
+                        className='truncate text-base font-bold text-white hover:underline'
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {episode.name}
+                      </Link>
+                      <ChevronDown className={`md:hidden size-5 text-white/50 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                     </span>
-                  )}
-                </span>
+                    <span className='mt-1 block text-sm text-white/45'>
+                      {episode.airDate}
+                    </span>
+                    <span className={`mt-2 text-sm leading-6 text-white/55 md:line-clamp-3 ${isExpanded ? 'block' : 'hidden md:block'}`}>
+                      {episode.overview || "No episode description available."}
+                    </span>
+                  </span>
+                </div>
 
-                <span className='min-w-0 flex-1'>
-                  <span className='block truncate text-base font-bold text-white'>
-                    {episode.name}
+                <div className={`mt-4 md:mt-0 items-center justify-between gap-3 pl-0 md:justify-end ${isExpanded ? 'flex' : 'hidden md:flex'}`}>
+                  <span className='text-sm font-semibold text-white/55 hidden md:block'>
+                    {runtimeLabel(episode.runtime) || "Runtime TBA"}
                   </span>
-                  <span className='mt-1 block text-sm text-white/45'>
-                    {episode.airDate}
-                  </span>
-                  <span className='mt-2 line-clamp-3 text-sm leading-6 text-white/55'>
-                    {episode.overview || "No episode description available."}
-                  </span>
-                </span>
-              </div>
 
-              <div className="flex items-center justify-between gap-3 pl-[3.75rem] md:justify-end md:pl-0">
-                <span className='text-sm font-semibold text-white/55'>
-                  {runtimeLabel(episode.runtime) || "Runtime TBA"}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleDownloadClick(episode);
-                  }}
-                  className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-white/65 transition hover:bg-white/10 hover:text-white cursor-pointer"
-                  title="Download Episode"
-                >
-                  <Download className="size-4" />
-                  <span>Download</span>
-                </button>
+                  <Link
+                    href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
+                    className="md:hidden flex flex-1 justify-center items-center gap-2 rounded-full bg-white text-black px-4 py-2 text-sm font-bold shadow-xl transition hover:bg-white/90"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Play className="size-4 fill-current ml-0.5" />
+                    <span>Play Episode</span>
+                  </Link>
+
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDownloadClick(episode);
+                    }}
+                    className="flex md:flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/65 transition hover:bg-white/10 hover:text-white cursor-pointer w-11 md:w-auto h-11 md:h-auto"
+                    title="Download Episode"
+                  >
+                    <Download className="size-4" />
+                    <span className="hidden md:inline">Download</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </Link>
-        ))}
+          );
+        })}
       </div>
       {hasMore ? (
         <button
@@ -561,19 +590,14 @@ function Episodes({
 
 export function MediaDetailContent({
   detail,
-  onSelect,
 }: {
   detail: MediaDetail;
-  onSelect: (item: MediaSummary) => void;
 }) {
   const { isLowDataMode } = useLowDataMode();
   const router = useRouter();
   const { user, setAuthModalOpen } = useAuth();
-  const playerRef = useRef<DetailBackdropPlayerHandle>(null);
   const [liked, setLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
-  const [muted, setMuted] = useState(true);
-  const [isPlayingTrailer, setIsPlayingTrailer] = useState(true);
   const [isDescriptionVisible, setIsDescriptionVisible] = useState(true);
   const [isWatchPartyModalOpen, setIsWatchPartyModalOpen] = useState(false);
   const [modalContainer, setModalContainer] = useState<HTMLElement | null>(null);
@@ -601,6 +625,11 @@ export function MediaDetailContent({
 
   const handleMouseLeave = () => {
     startHideTimer();
+  };
+
+  const handleSelect = (item: MediaSummary) => {
+    const slug = (item.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    router.push(`/title/${item.mediaType}/${item.id}-${slug}`);
   };
 
   useEffect(() => {
@@ -676,6 +705,23 @@ export function MediaDetailContent({
   const metaLine = detailMetaLine(detail);
   const playUrl = watchHref(detail, { season, episode });
 
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: detail.title,
+          text: `Check out ${detail.title} on Streamn`,
+          url: window.location.href,
+        });
+      } catch (err) {
+        // ignored
+      }
+    } else {
+      await navigator.clipboard.writeText(window.location.href);
+      alert("Link copied to clipboard!");
+    }
+  };
+
   const fileSizeRange = useMemo(() => {
     if (!sources || sources.length === 0) return null;
     const sizes = sources.map((s) => s.size).filter(Boolean);
@@ -699,92 +745,136 @@ export function MediaDetailContent({
 
   return (
     <>
-      <div className='modal-entrance max-h-[90vh] overflow-y-auto bg-black text-white'>
+      <div className='w-full bg-black text-white rounded-t-2xl md:rounded-none pb-12'>
         <section
-          className='relative min-h-[70vh] md:min-h-[75vh] select-none group'
+          className='relative w-full h-[50vh] min-h-[400px] md:h-[65vh] overflow-hidden bg-black flex items-end select-none group'
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <DetailBackdropPlayer
-            backdropPath={detail.backdropPath}
-            muted={muted}
-            onMutedChange={setMuted}
-            posterPath={detail.posterPath}
-            ref={playerRef}
-            trailerKey={detail.trailerKey}
-          />
-          <div className='detail-hero-content relative z-20 flex min-h-[70vh] md:min-h-[75vh] max-w-2xl flex-col justify-end p-6 pt-20 md:p-10'>
+          <div className="absolute inset-0">
+            <Image
+              src={tmdbImage(detail.backdropPath || detail.posterPath, "original")}
+              alt={detail.title}
+              fill
+              priority
+              className="object-cover object-top"
+            />
+          </div>
+          <div className='absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10' />
+          <div className='hidden md:block absolute inset-0 bg-gradient-to-r from-black via-black/40 to-transparent z-10' />
+
+          <div className="relative z-20 w-full px-6 md:px-10 md:pl-[112px] pb-2 md:pb-8 flex flex-col items-center text-center md:items-start md:text-left">
             {detail.logoPath ? (
               <Image
                 src={tmdbImage(detail.logoPath, "w500")}
                 alt={detail.title}
                 width={420}
                 height={170}
-                className='mb-3 h-auto max-h-24 md:max-h-36 w-auto max-w-[85%] object-contain object-left drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'
+                className='mb-3 h-auto max-h-24 md:max-h-36 w-auto max-w-[85%] object-contain object-center md:object-left drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'
               />
             ) : (
               <h2 className='mb-3 max-w-2xl text-4xl md:text-5xl font-black tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]'>
                 {detail.title}
               </h2>
             )}
+          </div>
+        </section>
 
-            {/* Description area fading out after 4.5s and reappearing on hover */}
-            <div
-              className={`transition-all duration-700 ease-in-out ${isDescriptionVisible
-                ? "opacity-100 max-h-96 translate-y-0 pointer-events-auto my-2"
-                : "opacity-0 max-h-0 -translate-y-2 pointer-events-none overflow-hidden my-0"
-                }`}
-            >
-              <div className='flex flex-wrap items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md mb-2'>
-                {detail.voteAverage ? (
-                  <>
-                    <span className='text-white font-bold flex items-center gap-1'>
-                      <Star className='size-3.5 fill-current' />
-                      {detail.voteAverage.toFixed(1)}
-                    </span>
-                    <span>·</span>
-                  </>
-                ) : null}
-                {detail.year ? (
-                  <>
-                    <span>{detail.year}</span>
-                    <span>·</span>
-                  </>
-                ) : null}
-                {detail.certification && detail.certification !== "NR" ? (
-                  <>
-                    <span className='px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20'>
-                      {detail.certification}
-                    </span>
-                    <span>·</span>
-                  </>
-                ) : null}
-                {detail.runtime ? (
-                  <span>{runtimeLabel(detail.runtime)}</span>
-                ) : null}
-                {fileSizeRange ? (
-                  <>
-                    <span>·</span>
-                    <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-[11px] font-bold text-blue-400 border border-blue-500/30">
-                      {fileSizeRange}
-                    </span>
-                  </>
-                ) : null}
-              </div>
+        {/* Info & Actions Section Below Banner */}
+        <section className='flex flex-col md:flex-row gap-6 px-6 md:px-10 md:pl-[112px] pt-4 md:pt-6 pb-6'>
+          <div className='flex flex-col gap-4 w-full md:w-[70%]'>
+            {/* Mobile Prominent Buttons (Watch / Watch Party) */}
+            <div className="flex md:hidden flex-col gap-3 w-full mb-2">
+              {sourceStatus === "loading" ? (
+                <button
+                  disabled
+                  className='flex items-center justify-center gap-3 bg-white/70 text-black/70 px-5 py-3 rounded-xl font-bold cursor-not-allowed shadow-xl backdrop-blur-sm'
+                  type='button'
+                >
+                  <Loader2 className='size-5 animate-spin' />
+                  <span>Checking source...</span>
+                </button>
+              ) : sourceStatus === "unavailable" ? (
+                <button
+                  disabled
+                  className='flex items-center justify-center gap-3 bg-white/20 text-white/50 px-5 py-3 rounded-xl font-bold cursor-not-allowed shadow-xl border border-white/10'
+                  type='button'
+                >
+                  <AlertCircle className='size-5' />
+                  <span>Source Unavailable</span>
+                </button>
+              ) : (
+                <Link
+                  className='flex items-center justify-center gap-3 bg-white text-black px-5 py-3 rounded-xl font-bold shadow-xl'
+                  href={playUrl}
+                >
+                  <Play className='size-5 fill-current' />
+                  <span>{watchProgress ? "Continue Watching" : "Watch Now"}</span>
+                </Link>
+              )}
 
-              <p className='text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal max-w-xl mb-3'>
-                {detail.overview}
-              </p>
+              <button
+                onClick={() => setIsWatchPartyModalOpen(true)}
+                className='flex items-center justify-center gap-3 bg-white/10 text-white px-5 py-3 rounded-xl font-bold shadow-xl border border-white/10'
+                type='button'
+              >
+                <PartyPopper className='size-5' />
+                <span>Watch Together</span>
+              </button>
+            </div>
 
-              {detail.genres.length > 0 ? (
-                <div className='text-xs md:text-sm font-semibold text-white/70 tracking-wide mb-2'>
-                  {detail.genres.join(" | ")}
-                </div>
+            {/* Meta Stats */}
+            <div className='flex flex-wrap items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md'>
+              {detail.voteAverage ? (
+                <>
+                  <span className='text-white font-bold flex items-center gap-1'>
+                    <Star className='size-3.5 fill-current' />
+                    {detail.voteAverage.toFixed(1)}
+                  </span>
+                  <span>·</span>
+                </>
+              ) : null}
+              {detail.year ? (
+                <>
+                  <span>{detail.year}</span>
+                  <span>·</span>
+                </>
+              ) : null}
+              {detail.certification && detail.certification !== "NR" ? (
+                <>
+                  <span className='px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20'>
+                    {detail.certification}
+                  </span>
+                  <span>·</span>
+                </>
+              ) : null}
+              {detail.runtime ? (
+                <span>{runtimeLabel(detail.runtime)}</span>
+              ) : null}
+              {fileSizeRange ? (
+                <>
+                  <span>·</span>
+                  <span className="px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20">
+                    {fileSizeRange}
+                  </span>
+                </>
               ) : null}
             </div>
 
-            {/* Action buttons */}
-            <div className='detail-action-row mt-3 flex flex-wrap items-center gap-3 z-20'>
+            {/* Description */}
+            <p className='text-white/80 text-sm md:text-base leading-relaxed drop-shadow-md font-normal max-w-3xl'>
+              {detail.overview}
+            </p>
+
+            {/* Genres */}
+            {detail.genres.length > 0 ? (
+              <div className='text-xs md:text-sm font-semibold text-white/50 tracking-wide'>
+                {detail.genres.join(" | ")}
+              </div>
+            ) : null}
+
+            {/* Desktop Action Buttons */}
+            <div className='hidden md:flex flex-wrap items-center gap-3 z-20 mt-2'>
               {sourceStatus === "loading" ? (
                 <button
                   disabled
@@ -852,14 +942,11 @@ export function MediaDetailContent({
                 </div>
               </button>
 
-              <WatchlistPicker iconOnly item={detail} menuPosition='up' />
+              <WatchlistPicker iconOnly item={detail} menuPosition='up' customButtonClass="w-[42px] h-[42px] rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-colors" />
 
               <button
                 aria-label={liked ? "Unlike" : "Like"}
-                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all ${liked
-                  ? "bg-white text-black border-white"
-                  : "bg-white/10 hover:bg-white/20 text-white border-white/20"
-                  }`}
+                className={`w-[42px] h-[42px] rounded-full border flex items-center justify-center transition-colors ${liked ? "bg-white text-black border-white" : "bg-white/10 hover:bg-white/20 text-white border-white/10"}`}
                 disabled={likeBusy}
                 onClick={toggleLike}
                 type='button'
@@ -870,57 +957,68 @@ export function MediaDetailContent({
               {sources.length > 0 && (
                 <button
                   onClick={() => setDownloadModalOpen(true)}
-                  className='w-11 h-11 rounded-full border bg-white/10 hover:bg-white/20 text-white border-white/20 flex items-center justify-center transition-all'
+                  className='w-[42px] h-[42px] rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-colors'
                   type='button'
-                  title="Download Episode"
+                  title="Download"
                 >
                   <Download className='size-5' />
                 </button>
               )}
-            </div>
-          </div>
-
-          {/* Controls fixed at far right edge of container */}
-          {!isLowDataMode && (
-            <div className='absolute right-6 md:right-10 bottom-6 z-30 flex items-center gap-3'>
-              {detail.trailerKey ? (
-                <button
-                  aria-label={isPlayingTrailer ? "Pause trailer" : "Play trailer"}
-                  className='flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105'
-                  onClick={() => {
-                    playerRef.current?.togglePlay();
-                    setIsPlayingTrailer((prev) => !prev);
-                  }}
-                  type='button'
-                >
-                  {isPlayingTrailer ? (
-                    <Pause className='size-5 fill-current' />
-                  ) : (
-                    <Play className='size-5 fill-current ml-0.5' />
-                  )}
-                </button>
-              ) : null}
-
+              
               <button
-                aria-label={muted ? "Unmute preview" : "Mute preview"}
-                className='w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105'
-                onClick={() => {
-                  playerRef.current?.setMuted(!muted);
-                  setMuted(!muted);
-                }}
-                type='button'
+                onClick={handleShare}
+                className='w-[42px] h-[42px] rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-colors'
+                title="Share"
               >
-                {muted ? (
-                  <VolumeX className='size-5' />
-                ) : (
-                  <Volume2 className='size-5' />
-                )}
+                <Share2 className='size-5' />
               </button>
             </div>
-          )}
+
+            {/* Mobile Action Buttons (Add, Like, Download, Share) below description */}
+            <div className="flex md:hidden flex-wrap items-center mt-6 justify-between w-full px-4">
+              <div className="flex flex-col items-center gap-1.5">
+                <WatchlistPicker iconOnly item={detail} menuPosition='up' customButtonClass="p-2 text-white/70 hover:text-white transition-colors" />
+                <span className="text-[10px] font-semibold text-white/50">My List</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <button
+                  aria-label={liked ? "Unlike" : "Like"}
+                  className={`p-2 transition-colors ${liked ? "text-white" : "text-white/70 hover:text-white"}`}
+                  disabled={likeBusy}
+                  onClick={toggleLike}
+                  type='button'
+                >
+                  <ThumbsUp className={`size-5 ${liked ? "fill-current" : ""}`} />
+                </button>
+                <span className="text-[10px] font-semibold text-white/50">Like</span>
+              </div>
+              {sources.length > 0 && (
+                <div className="flex flex-col items-center gap-1.5">
+                  <button
+                    onClick={() => setDownloadModalOpen(true)}
+                    className='p-2 text-white/70 hover:text-white transition-colors'
+                    type='button'
+                  >
+                    <Download className='size-5' />
+                  </button>
+                  <span className="text-[10px] font-semibold text-white/50">Download</span>
+                </div>
+              )}
+              <div className="flex flex-col items-center gap-1.5">
+                <button
+                  onClick={handleShare}
+                  className='p-2 text-white/70 hover:text-white transition-colors'
+                  type='button'
+                >
+                  <Share2 className='size-5' />
+                </button>
+                <span className="text-[10px] font-semibold text-white/50">Share</span>
+              </div>
+            </div>
+          </div>
         </section>
 
-        <section className='modal-body-entrance space-y-9 px-6 pb-10 pt-6 md:px-10'>
+        <section className='modal-body-entrance space-y-9 px-6 pb-10 pt-6 md:px-10 md:pl-[112px]'>
 
           {detail.episodes.length ? (
             <Episodes
@@ -935,28 +1033,45 @@ export function MediaDetailContent({
             <div>
               <h3 className='section-title'>More Like This</h3>
               <div className='grid grid-cols-2 gap-4 md:grid-cols-4'>
-                {detail.recommendations.slice(0, 8).map((item) => (
-                  <button
-                    className='group relative aspect-[16/9] overflow-hidden rounded-2xl bg-white/8 text-left'
-                    key={`${item.mediaType}-${item.id}`}
-                    onClick={() => onSelect(item)}
-                    type='button'
-                  >
-                    <Image
-                      src={tmdbImage(
-                        item.backdropPath || item.posterPath,
-                        "w780",
-                      )}
-                      alt=''
-                      fill
-                      sizes='(max-width: 768px) 50vw, 280px'
-                      className='object-cover transition group-hover:scale-105'
-                    />
-                    <span className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent p-3 text-sm font-bold'>
-                      {item.title}
-                    </span>
-                  </button>
-                ))}
+                {detail.recommendations.slice(0, 8).map((item) => {
+                  const releaseDate = item.releaseDate || item.firstAirDate;
+                  const year = releaseDate ? new Date(releaseDate).getFullYear() : "";
+                  const typeLabel = item.mediaType === "movie" ? "MOVIE" : "SERIES";
+                  
+                  return (
+                    <button
+                      className='group flex flex-col text-left'
+                      key={`${item.mediaType}-${item.id}`}
+                      onClick={() => handleSelect(item)}
+                      type='button'
+                    >
+                      <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-white/10 bg-white/5 transition-transform duration-300 group-hover:border-white/20">
+                        <Image
+                          src={tmdbImage(item.backdropPath || item.posterPath, "w780")}
+                          alt=''
+                          fill
+                          sizes='(max-width: 768px) 50vw, 280px'
+                          className='object-cover transition duration-500 group-hover:scale-105'
+                        />
+                        {item.voteAverage ? (
+                          <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-xs font-bold text-white backdrop-blur-md">
+                            <Star className="size-3 fill-current" />
+                            {item.voteAverage.toFixed(1)}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 w-full pr-2">
+                        <h4 className='truncate text-sm font-bold text-white transition-colors group-hover:text-white/80'>
+                          {item.title}
+                        </h4>
+                        <div className="mt-0.5 flex items-center text-[11px] font-semibold text-white/50">
+                          {year ? <span>{year} <span className="mx-1 text-white/30">•</span> </span> : null}
+                          <span className="uppercase tracking-wider">{typeLabel}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : null}
