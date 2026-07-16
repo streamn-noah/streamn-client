@@ -811,6 +811,46 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   return (
     <main className="discover-shell bg-black min-h-screen pl-0 md:pl-[72px] transition-all duration-300">
       <StreamnNav />
+      {/* Mobile Tabs */}
+      <div className="md:hidden pt-[68px] flex items-center justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-4 relative z-40 bg-gradient-to-b from-black/80 to-transparent">
+        <Link
+          href="/discover?tab=home"
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "home" || !tab || tab === "all"
+            ? "bg-white text-black"
+            : "text-white/80 hover:text-white"
+            }`}
+        >
+          Home
+        </Link>
+        <Link
+          href="/discover?tab=shows"
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "shows"
+            ? "bg-white text-black"
+            : "text-white/80 hover:text-white"
+            }`}
+        >
+          Series
+        </Link>
+        <Link
+          href="/discover?tab=movies"
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "movies"
+            ? "bg-white text-black"
+            : "text-white/80 hover:text-white"
+            }`}
+        >
+          Movies
+        </Link>
+        <Link
+          href="/discover?tab=anime"
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "anime"
+            ? "bg-white text-black"
+            : "text-white/80 hover:text-white"
+            }`}
+        >
+          Anime
+        </Link>
+      </div>
+
 
       {/* Hero Banner Section */}
       {tab !== "genre" && activeBanner && (
@@ -893,10 +933,10 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
             <div className="flex items-center justify-between w-full pt-1">
               
               {/* Primary Actions */}
-              <div className="flex items-center gap-3 flex-1 md:flex-none">
+              <div className="flex items-center gap-3 flex-none md:flex-none">
                 <Link
                   href={watchHref(activeBanner)}
-                  className="flex-1 md:flex-none md:w-auto px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center justify-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
+                  className="flex-none md:flex-none md:w-auto px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center justify-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
                 >
                   <Play className="w-4 h-4 fill-current ml-0.5" />
                   <span className="md:hidden">Play</span>
@@ -906,7 +946,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
                 {bannerSources.length > 0 && (
                   <button
                     onClick={() => setBannerDownloadModalOpen(true)}
-                    className="hidden md:flex px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold items-center justify-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
+                    className="hidden md:flex px-5 py-2.5 rounded-full bg-white/20 hover:bg-white/30 text-white border border-white/20 backdrop-blur-md font-semibold text-sm items-center justify-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
                     type="button"
                   >
                     <Download className="w-4 h-4" />
@@ -916,7 +956,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
                 <button
                   onClick={() => openDetail(activeBanner)}
-                  className="w-[44px] h-[44px] md:w-auto md:h-auto md:px-5 md:py-2.5 rounded-full bg-white/20 hover:bg-white/30 text-white md:bg-white md:hover:bg-white/90 md:text-black md:font-bold border border-white/20 md:border-none backdrop-blur-md transition-all flex items-center justify-center gap-2 shadow-xl shrink-0 hover:scale-105"
+                  className="w-[44px] h-[44px] md:w-auto md:h-auto md:px-5 md:py-2.5 rounded-full bg-white/20 hover:bg-white/30 text-white border border-white/20 backdrop-blur-md font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-xl shrink-0 hover:scale-105"
                   type="button"
                   aria-label="More Info"
                 >
@@ -1024,47 +1064,6 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
       {/* Rows Section Container */}
       <section className="relative z-10 px-4 sm:px-8 md:px-12 py-4 pb-24">
-        
-        {/* Mobile Tabs */}
-        <div className="md:hidden flex items-center justify-center gap-2 overflow-x-auto no-scrollbar mb-6 -mx-4 px-4 pb-2">
-          <Link
-            href="/discover?tab=home"
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap ${tab === "home" || !tab || tab === "all"
-              ? "bg-white text-black border-white"
-              : "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
-              }`}
-          >
-            Home
-          </Link>
-          <Link
-            href="/discover?tab=shows"
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap ${tab === "shows"
-              ? "bg-white text-black border-white"
-              : "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
-              }`}
-          >
-            Series
-          </Link>
-          <Link
-            href="/discover?tab=movies"
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap ${tab === "movies"
-              ? "bg-white text-black border-white"
-              : "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
-              }`}
-          >
-            Movies
-          </Link>
-          <Link
-            href="/discover?tab=anime"
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap ${tab === "anime"
-              ? "bg-white text-black border-white"
-              : "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
-              }`}
-          >
-            Anime
-          </Link>
-        </div>
-
         {tab === "home" && renderHomeRows()}
         {tab === "movies" && renderMoviesRows()}
         {tab === "shows" && renderShowsRows()}
