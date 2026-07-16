@@ -314,96 +314,92 @@ function Episodes({
           </button>
         </div>
       </div>
-      <div
-        className={`episode-list flex flex-col gap-3 ${loadingSeason ? "opacity-55" : ""}`}
-      >
+      <div className={`episode-list flex flex-col gap-3 ${loadingSeason ? "opacity-55" : ""}`}>
         {visibleEpisodes.map((episode) => {
           const isExpanded = expandedEpisode === episode.id;
           return (
-            <div
-              className='group block border-b border-white/8 p-4 transition-colors hover:bg-white/[0.05] last:border-b-0 cursor-pointer'
-              key={episode.id}
-              onClick={() => {
-                setExpandedEpisode(isExpanded ? null : episode.id);
-              }}
-            >
-              <div className='flex flex-col md:flex-row md:items-center md:gap-5'>
-                <div className='flex min-w-0 flex-1 items-start gap-4 md:items-center'>
-                  <span className='flex size-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg font-black text-white/55'>
+            <div className='group block rounded-xl border border-white/10 bg-[#0d0d0f] transition-colors hover:bg-white/[0.05] overflow-hidden' key={episode.id}>
+              
+              {/* WEB LAYOUT (hidden on mobile) */}
+              <div className='hidden md:flex items-start gap-4 p-4'>
+                <Link 
+                  href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
+                  className='relative aspect-video w-56 shrink-0 overflow-hidden rounded-lg bg-white/8 block'
+                >
+                  {episode.stillPath ? (
+                    <Image src={tmdbImage(episode.stillPath, isLowDataMode ? "w200" : "w300")} alt='' fill sizes='224px' loading={isLowDataMode ? "lazy" : undefined} quality={isLowDataMode ? 60 : 75} className='object-cover transition-transform duration-300 group-hover:scale-[1.03]' />
+                  ) : (
+                    <span className='flex h-full w-full items-center justify-center bg-white/[0.02] text-white/25'><Film className='size-5' /></span>
+                  )}
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Play className="size-6 text-white fill-current drop-shadow-md" />
+                  </div>
+                  <div className="absolute bottom-2 left-2 bg-black/80 px-2 py-0.5 rounded-md text-sm font-bold text-white backdrop-blur-md">
                     {episode.episodeNumber}
-                  </span>
+                  </div>
+                </Link>
 
-                  <Link 
-                    href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
-                    className='relative aspect-video w-24 shrink-0 overflow-hidden rounded-xl bg-white/8 md:w-44 block'
-                  >
-                    {episode.stillPath ? (
-                      <Image
-                        src={tmdbImage(episode.stillPath, isLowDataMode ? "w200" : "w300")}
-                        alt=''
-                        fill
-                        sizes='(max-width: 768px) 96px, 176px'
-                        loading={isLowDataMode ? "lazy" : undefined}
-                        quality={isLowDataMode ? 60 : 75}
-                        className='object-cover transition-transform duration-300 group-hover:scale-[1.03]'
-                      />
-                    ) : (
-                      <span className='flex h-full w-full items-center justify-center bg-white/[0.02] text-white/25'>
-                        <Film className='size-5' />
-                      </span>
-                    )}
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Play className="size-6 text-white fill-current drop-shadow-md" />
-                    </div>
+                <div className='flex-1 min-w-0 flex flex-col justify-center py-1 pr-4'>
+                  <Link href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`} className='truncate text-lg font-bold text-white hover:underline'>
+                    {episode.name}
                   </Link>
-
-                  <span className='min-w-0 flex-1'>
-                    <span className='flex items-center justify-between md:justify-start'>
-                      <Link 
-                        href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
-                        className='truncate text-base font-bold text-white hover:underline'
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {episode.name}
-                      </Link>
-                      <ChevronDown className={`md:hidden size-5 text-white/50 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                    </span>
-                    <span className='mt-1 block text-sm text-white/45'>
-                      {episode.airDate}
-                    </span>
-                    <span className={`mt-2 text-sm leading-6 text-white/55 md:line-clamp-3 ${isExpanded ? 'block' : 'hidden md:block'}`}>
-                      {episode.overview || "No episode description available."}
-                    </span>
-                  </span>
+                  <p className='mt-2 text-sm leading-relaxed text-white/60 line-clamp-2'>
+                    {episode.overview || "No episode description available."}
+                  </p>
                 </div>
 
-                <div className={`mt-4 md:mt-0 items-center justify-between gap-3 pl-0 md:justify-end ${isExpanded ? 'flex' : 'hidden md:flex'}`}>
-                  <span className='text-sm font-semibold text-white/55 hidden md:block'>
-                    {runtimeLabel(episode.runtime) || "Runtime TBA"}
-                  </span>
-
-                  <Link
-                    href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
-                    className="md:hidden flex flex-1 justify-center items-center gap-2 rounded-full bg-white text-black px-4 py-2 text-sm font-bold shadow-xl transition hover:bg-white/90"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Play className="size-4 fill-current ml-0.5" />
-                    <span>Play Episode</span>
-                  </Link>
-
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleDownloadClick(episode);
-                    }}
-                    className="flex md:flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/65 transition hover:bg-white/10 hover:text-white cursor-pointer w-11 md:w-auto h-11 md:h-auto"
-                    title="Download Episode"
-                  >
-                    <Download className="size-4" />
-                    <span className="hidden md:inline">Download</span>
+                <div className='shrink-0 flex items-center justify-center pl-4 py-2'>
+                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDownloadClick(episode); }} className="p-2 text-white/50 hover:text-white transition-colors cursor-pointer" title="Download Episode">
+                    <Download className="size-5" />
                   </button>
                 </div>
+              </div>
+
+              {/* MOBILE LAYOUT (hidden on web) */}
+              <div className='md:hidden block'>
+                <div className='flex items-center gap-4 p-3 cursor-pointer' onClick={() => setExpandedEpisode(isExpanded ? null : episode.id)}>
+                  <div className='relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-white/8'>
+                    {episode.stillPath ? (
+                      <Image src={tmdbImage(episode.stillPath, "w200")} alt='' fill sizes='128px' loading="lazy" quality={60} className='object-cover' />
+                    ) : (
+                      <span className='flex h-full w-full items-center justify-center bg-white/[0.02] text-white/25'><Film className='size-5' /></span>
+                    )}
+                    <div className="absolute bottom-1 left-1 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-bold text-white backdrop-blur-md">
+                      {episode.episodeNumber}
+                    </div>
+                  </div>
+                  
+                  <div className='flex-1 min-w-0'>
+                    <h4 className='font-bold text-sm text-white line-clamp-2'>
+                      {episode.name}
+                    </h4>
+                  </div>
+
+                  <div className='shrink-0 pr-1'>
+                    <ChevronDown className={`size-5 text-white/50 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className='p-4 pt-2 border-t border-white/5 animate-in slide-in-from-top-2 fade-in duration-200'>
+                    <h4 className='font-bold text-white mb-2 text-sm'>
+                      {episode.episodeNumber}. {episode.name}
+                    </h4>
+                    <p className='text-xs text-white/60 leading-relaxed mb-4'>
+                      {episode.overview || "No episode description available."}
+                    </p>
+                    
+                    <div className='flex items-center gap-3'>
+                      <Link href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`} className='flex-1 flex justify-center items-center gap-2 rounded-full bg-white text-black py-2 text-sm font-bold shadow-xl transition active:scale-95'>
+                        <Play className="size-4 fill-current ml-0.5" />
+                        Play
+                      </Link>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDownloadClick(episode); }} className='flex items-center justify-center size-10 rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition active:scale-95 shrink-0'>
+                        <Download className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
