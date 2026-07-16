@@ -812,39 +812,39 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     <main className="discover-shell bg-black min-h-screen pl-0 md:pl-[72px] transition-all duration-300">
       <StreamnNav />
       {/* Mobile Tabs */}
-      <div className="md:hidden pt-[68px] flex items-center justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-4 relative z-40 bg-gradient-to-b from-black/80 to-transparent">
+      <div className="md:hidden absolute top-0 left-0 right-0 pt-[68px] flex items-center justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-4 z-40 pointer-events-none">
         <Link
           href="/discover?tab=home"
-          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "home" || !tab || tab === "all"
-            ? "bg-white text-black"
-            : "text-white/80 hover:text-white"
+          className={`pointer-events-auto px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "home" || !tab || tab === "all"
+            ? "bg-white text-black shadow-md"
+            : "text-white/90 hover:text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
             }`}
         >
           Home
         </Link>
         <Link
           href="/discover?tab=shows"
-          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "shows"
-            ? "bg-white text-black"
-            : "text-white/80 hover:text-white"
+          className={`pointer-events-auto px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "shows"
+            ? "bg-white text-black shadow-md"
+            : "text-white/90 hover:text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
             }`}
         >
           Series
         </Link>
         <Link
           href="/discover?tab=movies"
-          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "movies"
-            ? "bg-white text-black"
-            : "text-white/80 hover:text-white"
+          className={`pointer-events-auto px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "movies"
+            ? "bg-white text-black shadow-md"
+            : "text-white/90 hover:text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
             }`}
         >
           Movies
         </Link>
         <Link
           href="/discover?tab=anime"
-          className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "anime"
-            ? "bg-white text-black"
-            : "text-white/80 hover:text-white"
+          className={`pointer-events-auto px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${tab === "anime"
+            ? "bg-white text-black shadow-md"
+            : "text-white/90 hover:text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
             }`}
         >
           Anime
