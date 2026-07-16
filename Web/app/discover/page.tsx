@@ -6,6 +6,10 @@ import {
   getLatest,
   getTopRated,
   getTrending,
+  getAnime,
+  getTrendingAnime,
+  getTopRatedAnime,
+  getTopRatedAnimeMovies,
 } from "@/lib/tmdb";
 
 export default async function DiscoverPage() {
@@ -22,6 +26,10 @@ export default async function DiscoverPage() {
     movieGenres,
     tvGenres,
     providersList,
+    animeTv,
+    trendingAnime,
+    topRatedAnime,
+    topRatedAnimeMovies,
   ] = await Promise.all([
     getTrending("all", "week").catch(() => []),
     getTrending("movie", "week").catch(() => []),
@@ -35,6 +43,10 @@ export default async function DiscoverPage() {
     getGenreList("movie").catch(() => [] as { id: number; name: string }[]),
     getGenreList("tv").catch(() => [] as { id: number; name: string }[]),
     fetchWatchProvidersFromTmdb().catch(() => []),
+    getAnime().catch(() => []),
+    getTrendingAnime("week").catch(() => []),
+    getTopRatedAnime().catch(() => []),
+    getTopRatedAnimeMovies().catch(() => []),
   ]);
 
   const bannerSource = trendingWeek
@@ -62,6 +74,10 @@ export default async function DiscoverPage() {
         })),
         movieGenres: movieGenres ?? [],
         tvGenres: tvGenres ?? [],
+        animeTv,
+        trendingAnime,
+        topRatedAnime,
+        topRatedAnimeMovies,
       }}
     />
   );

@@ -17,11 +17,7 @@ import {
   Download,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import {
-  DetailSkeleton,
-  MediaDetailContent,
-} from "@/components/streamn/media-detail-content";
-import { ResponsiveMediaModal } from "@/components/streamn/responsive-media-modal";
+
 import { StreamnNav } from "@/components/streamn/streamn-nav";
 import type { MediaDetail, MediaSummary, MediaType } from "@/lib/media";
 import { tmdbImage } from "@/lib/media";
@@ -65,6 +61,10 @@ export type DiscoverPageData = {
   providers: { name: string; slug: string; logoPath?: string }[];
   movieGenres: { id: number; name: string }[];
   tvGenres: { id: number; name: string }[];
+  animeTv: MediaSummary[];
+  trendingAnime: MediaSummary[];
+  topRatedAnime: MediaSummary[];
+  topRatedAnimeMovies: MediaSummary[];
 };
 
 declare global {
@@ -396,9 +396,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   const thumbTrackRef = useRef<HTMLDivElement>(null);
 
   const [continueWatching, setContinueWatching] = useState<MediaSummary[]>([]);
-  const [selected, setSelected] = useState<MediaSummary | null>(null);
-  const [detail, setDetail] = useState<MediaDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  
 
   const [genreResults, setGenreResults] = useState<MediaSummary[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
@@ -409,6 +407,19 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
   const [bannerSources, setBannerSources] = useState<any[]>([]);
   const [bannerDownloadModalOpen, setBannerDownloadModalOpen] = useState(false);
+  const [isDescriptionVisible, setIsDescriptionVisible] = useState(true);
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMouseEnter = () => {
+    setIsDescriptionVisible(true);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+  };
+  const handleMouseLeave = () => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      setIsDescriptionVisible(false);
+    }, 4500);
+  };
 
   useEffect(() => {
     setContinueWatching(getContinueWatching());
@@ -437,6 +448,13 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
   const bannerCount = filteredBannerItems.length;
   const activeBanner = bannerCount > 0 ? filteredBannerItems[bannerIndex % bannerCount] : undefined;
+
+  useEffect(() => {
+    handleMouseLeave();
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [activeBanner]);
 
   const [videoLoaded, setVideoLoaded] = useState(false);
 
@@ -635,22 +653,8 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   }, [tab, genreId, genreType]);
 
   async function openDetail(item: MediaSummary) {
-    setSelected(item);
-    setDetail(null);
-    setDetailLoading(true);
-    try {
-      const response = await fetch(
-        `/api/details?type=${item.mediaType}&id=${item.id}`
-      );
-      const payload = await response.json();
-      if (!response.ok)
-        throw new Error(payload.error ?? "Could not load detail.");
-      setDetail(payload);
-    } catch {
-      setSelected(null);
-    } finally {
-      setDetailLoading(false);
-    }
+    const titleSlug = item.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || '';
+    router.push(`/title/${item.mediaType}/${item.id}-${titleSlug}`);
   }
 
   let rowIndex = 0;
@@ -767,6 +771,23 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     </>
   );
 
+  const renderAnimeRows = () => (
+    <>
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow items={data.trendingAnime} onSelect={openDetail} title="Trending Anime" isTop10 />
+      </LazyRevealRow>
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow items={data.animeTv} onSelect={openDetail} title="Popular Anime" />
+      </LazyRevealRow>
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow items={data.topRatedAnime} onSelect={openDetail} title="Top Rated Anime" />
+      </LazyRevealRow>
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow items={data.topRatedAnimeMovies} onSelect={openDetail} title="Top Rated Anime Movies" />
+      </LazyRevealRow>
+    </>
+  );
+
   const renderGenreRows = () => {
     if (genreLoading)
       return (
@@ -815,7 +836,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
                   ref={iframeRef}
                   onLoad={() => setVideoLoaded(true)}
                   src={`https://www.youtube-nocookie.com/embed/${activeBanner.trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&playsinline=1`}
-                  className={`absolute top-0 left-1/2 -translate-x-1/2 w-[350vw] sm:w-[200vw] md:w-[150vw] aspect-video pointer-events-none transition-opacity duration-700 ${videoLoaded ? "opacity-100" : "opacity-0"
+                  className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350vw] sm:w-[200vw] md:w-[150vw] aspect-video pointer-events-none transition-opacity duration-700 ${videoLoaded ? "opacity-100" : "opacity-0"
                     }`}
                   allow="autoplay; encrypted-media; picture-in-picture"
                   title="Backdrop Trailer"
@@ -827,38 +848,11 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent z-10" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
 
-          {/* Pause and Mute controls placed at right edge of Banner */}
-          {!isLowDataMode && (
-            <div className="flex absolute right-4 md:right-16 top-1/2 -translate-y-1/2 z-30 flex-col gap-3.5">
-            <button
-              onClick={togglePlayVideo}
-              className="w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105"
-              type="button"
-              aria-label={isPlayingVideo ? "Pause video" : "Play video"}
-            >
-              {isPlayingVideo ? (
-                <Pause className="w-5 h-5 fill-current" />
-              ) : (
-                <Play className="w-5 h-5 fill-current ml-0.5" />
-              )}
-            </button>
-            <button
-              onClick={toggleMuteVideo}
-              className="w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-xl transition-all hover:scale-105"
-              type="button"
-              aria-label={isMuted ? "Unmute video" : "Mute video"}
-            >
-              {isMuted ? (
-                <VolumeX className="w-5 h-5" />
-              ) : (
-                <Volume2 className="w-5 h-5" />
-              )}
-            </button>
-            </div>
-          )}
+          
 
           {/* Banner Copy Stack */}
-          <div className="absolute inset-x-6 md:left-14 md:right-auto bottom-24 z-20 max-w-xl flex flex-col items-center text-center md:items-start md:text-left mx-auto md:mx-0 gap-3.5">
+          <div className="absolute inset-x-6 md:left-14 md:right-14 bottom-0 pb-6 md:pb-0 md:bottom-24 z-20 flex flex-col md:items-start gap-3.5">
+            <div className="max-w-xl flex flex-col items-center text-center md:items-start md:text-left mx-auto md:mx-0 gap-3.5 w-full">
             {activeBanner.logoPath ? (
               <Image
                 src={tmdbImage(activeBanner.logoPath, "w500")}
@@ -879,52 +873,93 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
               {bannerFileSizeRange && (
                 <>
                   <span>·</span>
-                  <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-[11px] font-bold text-blue-400 border border-blue-500/30">
+                  <span className="px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20">
                     {bannerFileSizeRange}
                   </span>
                 </>
               )}
             </div>
 
-            <p className="text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal">
-              {activeBanner.overview}
-            </p>
+            <div className={`overflow-hidden transition-all duration-700 w-full ${
+                isDescriptionVisible ? "max-h-32 opacity-100 mt-1" : "max-h-0 opacity-0 mt-0 -mb-2 md:-mb-1"
+              }`}>
+                <p className="text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal">
+                  {activeBanner.overview}
+                </p>
+              </div>
+            </div>
 
-            {/* Action Buttons: Centered on Mobile, Left-aligned on Desktop */}
-            <div className="flex items-center justify-center md:justify-start gap-3 w-full pt-1 flex-wrap">
-              <Link
-                href={watchHref(activeBanner)}
-                className="px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
-              >
-                <Play className="w-4 h-4 fill-current ml-0.5" />
-                <span>{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
-              </Link>
-
-              {bannerSources.length > 0 && (
-                <button
-                  onClick={() => setBannerDownloadModalOpen(true)}
-                  className="w-12 h-12 md:w-auto md:h-auto rounded-full bg-black/50 hover:bg-white/20 border border-white/30 backdrop-blur-md text-white font-semibold text-xs md:text-sm transition-all flex items-center justify-center md:px-4 md:py-2 md:gap-2 shrink-0"
-                  type="button"
+            {/* Action Buttons & Controls: Justified Between */}
+            <div className="flex items-center justify-between w-full pt-1">
+              
+              {/* Primary Actions */}
+              <div className="flex items-center gap-3 flex-1 md:flex-none">
+                <Link
+                  href={watchHref(activeBanner)}
+                  className="flex-1 md:flex-none md:w-auto px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center justify-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
                 >
-                  <Download className="w-4 h-4" />
-                  <span className="hidden md:inline">Download</span>
-                </button>
-              )}
+                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                  <span className="md:hidden">Play</span>
+                  <span className="hidden md:inline">{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
+                </Link>
 
-              <button
-                onClick={() => openDetail(activeBanner)}
-                className="w-12 h-12 md:w-auto md:h-auto rounded-full bg-black/50 hover:bg-white/20 border border-white/30 backdrop-blur-md text-white font-semibold text-xs md:text-sm transition-all flex items-center justify-center md:px-4 md:py-2 md:gap-2 shrink-0"
-                type="button"
-                aria-label="See More"
-              >
-                <Info className="w-4 h-4" />
-                <span className="hidden md:inline">See More</span>
-              </button>
+                {bannerSources.length > 0 && (
+                  <button
+                    onClick={() => setBannerDownloadModalOpen(true)}
+                    className="hidden md:flex px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold items-center justify-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
+                    type="button"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => openDetail(activeBanner)}
+                  className="w-[44px] h-[44px] md:w-auto md:h-auto md:px-5 md:py-2.5 rounded-full bg-white/20 hover:bg-white/30 text-white md:bg-white md:hover:bg-white/90 md:text-black md:font-bold border border-white/20 md:border-none backdrop-blur-md transition-all flex items-center justify-center gap-2 shadow-xl shrink-0 hover:scale-105"
+                  type="button"
+                  aria-label="More Info"
+                >
+                  <Info className="w-5 h-5 md:w-4 md:h-4" />
+                  <span className="hidden md:inline">More Info</span>
+                </button>
+              </div>
+
+              {/* Controls (Mute/Pause) - Pause hidden on mobile */}
+              {!isLowDataMode && (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={togglePlayVideo}
+                    className="hidden md:flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105 shrink-0"
+                    type="button"
+                    aria-label={isPlayingVideo ? "Pause video" : "Play video"}
+                  >
+                    {isPlayingVideo ? (
+                      <Pause className="w-5 h-5 fill-current" />
+                    ) : (
+                      <Play className="w-5 h-5 fill-current ml-0.5" />
+                    )}
+                  </button>
+
+                  <button
+                    onClick={toggleMuteVideo}
+                    className="flex w-11 h-11 rounded-full bg-black/60 hover:bg-black/90 border border-white/20 backdrop-blur-md items-center justify-center text-white shadow-xl transition-all hover:scale-105 shrink-0"
+                    type="button"
+                    aria-label={isMuted ? "Unmute video" : "Mute video"}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="w-5 h-5" />
+                    ) : (
+                      <Volume2 className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Bottom Banner Carousel Indicator: Centered on Mobile, Right-aligned on Desktop */}
-          <div className="absolute left-1/2 -translate-x-1/2 md:left-auto md:right-16 md:translate-x-0 bottom-4 z-20 flex items-center gap-2 max-w-[92vw] md:max-w-[60vw]">
+          <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 md:left-auto md:right-16 md:translate-x-0 bottom-4 z-20 items-center gap-2 max-w-[92vw] md:max-w-[60vw]">
             <button
               className="w-7 h-7 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center shrink-0 border border-white/10"
               onClick={() =>
@@ -989,27 +1024,55 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
       {/* Rows Section Container */}
       <section className="relative z-10 px-4 sm:px-8 md:px-12 py-4 pb-24">
+        
+        {/* Mobile Tabs */}
+        <div className="md:hidden flex items-center justify-center gap-2 overflow-x-auto no-scrollbar mb-6 -mx-4 px-4 pb-2">
+          <Link
+            href="/discover?tab=home"
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap ${tab === "home" || !tab || tab === "all"
+              ? "bg-white text-black border-white"
+              : "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
+              }`}
+          >
+            Home
+          </Link>
+          <Link
+            href="/discover?tab=shows"
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap ${tab === "shows"
+              ? "bg-white text-black border-white"
+              : "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
+              }`}
+          >
+            Series
+          </Link>
+          <Link
+            href="/discover?tab=movies"
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap ${tab === "movies"
+              ? "bg-white text-black border-white"
+              : "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
+              }`}
+          >
+            Movies
+          </Link>
+          <Link
+            href="/discover?tab=anime"
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap ${tab === "anime"
+              ? "bg-white text-black border-white"
+              : "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
+              }`}
+          >
+            Anime
+          </Link>
+        </div>
+
         {tab === "home" && renderHomeRows()}
         {tab === "movies" && renderMoviesRows()}
         {tab === "shows" && renderShowsRows()}
+        {tab === "anime" && renderAnimeRows()}
         {tab === "genre" && renderGenreRows()}
       </section>
 
-      {/* Media Detail Modal */}
-      <ResponsiveMediaModal
-        description={selected?.overview ?? "Media details"}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null);
-        }}
-        open={Boolean(selected)}
-        title={selected?.title ?? "Details"}
-      >
-        {detailLoading || !detail ? (
-          <DetailSkeleton />
-        ) : (
-          <MediaDetailContent detail={detail} onSelect={openDetail} />
-        )}
-      </ResponsiveMediaModal>
+      
 
       {/* Banner Download Modal */}
       {bannerDownloadModalOpen && (

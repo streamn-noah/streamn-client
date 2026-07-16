@@ -300,6 +300,75 @@ export async function getTopRated(mediaType: MediaType, page = 1) {
   );
 }
 
+export async function getAnime(page = 1) {
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>("/discover/tv", {
+    include_adult: false,
+    page,
+    sort_by: "popularity.desc",
+    with_genres: "16",
+    with_original_language: "ja",
+    "vote_count.gte": 60,
+  });
+
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, "tv")).filter(Boolean) as MediaSummary[],
+  );
+}
+
+export async function getTrendingAnime(timeWindow: "day" | "week" = "day") {
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(`/trending/tv/${timeWindow}`, {
+    with_genres: "16",
+    with_original_language: "ja",
+  });
+  // Note: The trending endpoint might not respect with_genres/with_original_language directly.
+  // Instead, it's more reliable to use /discover/tv with sort_by=trending if possible, but let's try this. 
+  // Alternatively, discover with sort_by=popularity.desc for the day/week is safer.
+  // Let's use discover for trending anime:
+  const discoverData = await tmdbFetch<TmdbListResponse<TmdbMedia>>(`/discover/tv`, {
+    include_adult: false,
+    page: 1,
+    sort_by: "popularity.desc",
+    with_genres: "16",
+    with_original_language: "ja",
+    "vote_average.gte": 6,
+    "first_air_date.gte": new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // last 30 days
+  });
+
+  return uniqueByMedia(
+    discoverData.results.map((item) => normalizeMedia(item, "tv")).filter(Boolean) as MediaSummary[],
+  );
+}
+
+export async function getTopRatedAnime(page = 1) {
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>("/discover/tv", {
+    include_adult: false,
+    page,
+    sort_by: "vote_average.desc",
+    with_genres: "16",
+    with_original_language: "ja",
+    "vote_count.gte": 200,
+  });
+
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, "tv")).filter(Boolean) as MediaSummary[],
+  );
+}
+
+export async function getTopRatedAnimeMovies(page = 1) {
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>("/discover/movie", {
+    include_adult: false,
+    page,
+    sort_by: "vote_average.desc",
+    with_genres: "16",
+    with_original_language: "ja",
+    "vote_count.gte": 200,
+  });
+
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, "movie")).filter(Boolean) as MediaSummary[],
+  );
+}
+
 export type WatchProviderInfo = {
   id: number;
   name: string;
