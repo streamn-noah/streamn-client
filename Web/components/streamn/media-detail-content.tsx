@@ -283,13 +283,14 @@ function Episodes({
 
   return (
     <div>
-      <div className='mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+      <div className='mb-6 flex flex-col gap-4'>
         <h3 className='section-title mb-0'>Episodes</h3>
-        <div className="flex items-center gap-3">
-          <label className='season-select-wrap'>
+        <div className="flex flex-row items-center gap-2 sm:gap-3 w-full overflow-x-auto no-scrollbar pb-1">
+          {/* Season Dropdown */}
+          <label className='relative shrink-0'>
             <span className='sr-only'>Choose season</span>
             <select
-              className='season-select'
+              className='appearance-none bg-[#0d0d0f] sm:bg-transparent border border-white/10 rounded-xl py-2 pl-4 pr-10 text-sm font-semibold text-white outline-none focus:border-white/30 h-10 w-[120px] sm:w-[140px]'
               disabled={loadingSeason}
               onChange={(event) => changeSeason(Number(event.target.value))}
               value={selectedSeason}
@@ -303,14 +304,30 @@ function Episodes({
             <ChevronDown className='pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/55' />
           </label>
 
+          {/* Search Bar */}
+          <div className="relative flex-1 min-w-[160px] md:max-w-sm">
+             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/50" />
+             <input 
+               type="text" 
+               placeholder="Search episode..." 
+               className="w-full bg-[#0d0d0f] sm:bg-transparent border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 h-10"
+               onChange={(e) => setSearchEpisode(e.target.value)}
+             />
+          </div>
+
+          {/* Sort Button */}
+          <button className="shrink-0 flex items-center justify-center rounded-xl border border-white/10 bg-[#0d0d0f] sm:bg-transparent p-2 text-white/50 hover:bg-white/10 hover:text-white transition h-10 w-10">
+             <ArrowDownUp className="size-4" />
+          </button>
+          
+          {/* Download Season Button */}
           <button
             onClick={handleSeasonDownloadClick}
-            className="flex items-center gap-2 rounded-full bg-white text-black px-4 py-2 text-sm font-bold shadow-xl transition hover:bg-white/90 cursor-pointer whitespace-nowrap"
+            className="shrink-0 flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#0d0d0f] sm:bg-transparent px-3 sm:px-4 text-sm font-semibold text-white/65 hover:text-white transition cursor-pointer h-10"
             title="Download Entire Season"
           >
             <Download className="size-4" />
             <span className="hidden sm:inline">Download Season</span>
-            <span className="sm:hidden">Season</span>
           </button>
         </div>
       </div>
