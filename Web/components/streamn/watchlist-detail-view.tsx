@@ -47,7 +47,7 @@ export function WatchlistDetailView({
         {firstItem?.poster_path && (
           <>
             <Image
-              src={tmdbImage(firstItem.poster_path, "original")}
+              src={tmdbImage(firstItem.poster_path, "w1280")}
               alt={title}
               fill
               className="object-cover opacity-50 blur-sm"

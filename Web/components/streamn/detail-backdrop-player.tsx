@@ -136,7 +136,7 @@ export const DetailBackdropPlayer = forwardRef<
     [isPlaying, onMutedChange],
   );
 
-  const imageSrc = tmdbImage(backdropPath || posterPath, isLowDataMode ? "w780" : "original");
+  const imageSrc = tmdbImage(backdropPath || posterPath, isLowDataMode ? "w780" : "w1280");
 
   return (
     <div className='absolute inset-0 overflow-hidden bg-black select-none pointer-events-none'>

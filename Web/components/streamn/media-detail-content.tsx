@@ -24,9 +24,10 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
-import { IframePlayer } from "@/components/streamn/iframe-player";
-import { WatchlistPicker } from "@/components/streamn/watchlist-picker";
-import { WatchPartyInviteModal } from "@/components/streamn/watch-party-invite-modal";
+import dynamic from "next/dynamic";
+const IframePlayer = dynamic(() => import("@/components/streamn/iframe-player").then((mod) => mod.IframePlayer));
+const WatchlistPicker = dynamic(() => import("@/components/streamn/watchlist-picker").then((mod) => mod.WatchlistPicker));
+const WatchPartyInviteModal = dynamic(() => import("@/components/streamn/watch-party-invite-modal").then((mod) => mod.WatchPartyInviteModal));
 import type { Episode, MediaDetail, MediaSummary } from "@/lib/media";
 import { cinesrcUrl, tmdbImage } from "@/lib/media";
 import {
@@ -815,7 +816,7 @@ export function MediaDetailContent({
         >
           <div className="absolute inset-0">
             <Image
-              src={tmdbImage(detail.backdropPath || detail.posterPath, "original")}
+              src={tmdbImage(detail.backdropPath || detail.posterPath, "w1280")}
               alt={detail.title}
               fill
               priority

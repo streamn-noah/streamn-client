@@ -1154,7 +1154,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
               <Image
                 src={tmdbImage(
                   activeBanner.backdropPath || activeBanner.posterPath,
-                  isLowDataMode ? "w780" : "original"
+                  isLowDataMode ? "w780" : "w1280"
                 )}
                 alt={activeBanner.title}
                 fill

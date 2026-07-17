@@ -29,6 +29,7 @@ const satoshi = localFont({
     },
   ],
   variable: "--font-satoshi",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
