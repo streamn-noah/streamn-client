@@ -26,8 +26,12 @@ import {
   X,
   MoreHorizontal,
   Users as UsersIcon,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useLowDataMode } from "@/components/providers/low-data-provider";
+import { createPortal } from "react-dom";
+
 import { DefaultAvatarFace } from "@/components/streamn/default-avatar";
 import { WatchlistAvatarStack } from "@/components/streamn/watchlist-avatar-stack";
 import { StreamnNav } from "@/components/streamn/streamn-nav";
@@ -246,6 +250,7 @@ function LibraryRow({
 export function LibraryApp() {
   const router = useRouter();
   const { user, profile, loading, signOut, refreshProfile } = useAuth();
+  const { isLowDataMode, toggleLowDataMode } = useLowDataMode();
 
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [liked, setLiked] = useState<LikedRow[]>([]);
@@ -287,6 +292,20 @@ export function LibraryApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MediaSummary[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+
+  // Toast state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [addingItems, setAddingItems] = useState<Record<number, boolean>>({});
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setToastVisible(true);
+    setTimeout(() => {
+      setToastVisible(false);
+      setTimeout(() => setToastMessage(null), 300);
+    }, 3000);
+  };
 
 
 
@@ -415,6 +434,7 @@ export function LibraryApp() {
   }
 
   async function handleAddItemToWatchlist(listId: string, item: MediaSummary) {
+    setAddingItems((prev) => ({ ...prev, [item.id]: true }));
     const ok = await addToWatchlist(listId, item);
     if (ok) {
       const updatedItems = await getWatchlistItems(listId);
@@ -422,7 +442,9 @@ export function LibraryApp() {
       setWatchlists((prev) =>
         prev.map((list) => (list.id === listId ? { ...list, item_count: list.item_count + 1 } : list))
       );
+      showToast(`Added "${item.title}" to watchlist`);
     }
+    setAddingItems((prev) => ({ ...prev, [item.id]: false }));
   }
 
   async function handleShareWatchlist(watchlistId: string) {
@@ -797,6 +819,30 @@ export function LibraryApp() {
               <div className="text-xs text-white/40">
                 Email: <span className="text-white/80 font-mono">{user.email}</span>
               </div>
+
+              <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-white/10 text-white/80 shrink-0">
+                    <Activity className="size-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-white">Data Saver</div>
+                    <div className="text-xs text-white/50">Reduces image quality</div>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleLowDataMode}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-black ${
+                    isLowDataMode ? "bg-green-500" : "bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isLowDataMode ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
 
             <div className="pt-2 flex flex-col gap-2.5">
@@ -1088,15 +1134,21 @@ export function LibraryApp() {
                       </div>
                       <button
                         type="button"
-                        disabled={isAdded}
+                        disabled={isAdded || addingItems[item.id]}
                         onClick={() => handleAddItemToWatchlist(addModalWatchlist.id, item)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        className={`px-3 py-1.5 flex items-center justify-center gap-1 rounded-full text-xs font-semibold transition-all ${
                           isAdded
                             ? "bg-white/20 text-white/60 border border-white/20 opacity-80"
-                            : "bg-white hover:bg-white/90 text-black"
+                            : "bg-white hover:bg-white/90 text-black min-w-[70px]"
                         }`}
                       >
-                        {isAdded ? "Added" : "+ Add"}
+                        {addingItems[item.id] ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : isAdded ? (
+                          "Added"
+                        ) : (
+                          "+ Add"
+                        )}
                       </button>
                     </div>
                   );
@@ -1387,7 +1439,16 @@ export function LibraryApp() {
         </div>
       )}
 
-
+      {/* Toast Notification */}
+      {toastMessage && typeof document !== "undefined" && createPortal(
+        <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] transition-all duration-300 ease-out ${toastVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+          <div className="flex items-center gap-2 px-4 py-3 rounded-full bg-black/90 border border-white/20 text-white shadow-2xl backdrop-blur-md">
+            <Check className="size-4 text-green-400" />
+            <span className="text-sm font-medium">{toastMessage}</span>
+          </div>
+        </div>,
+        document.body
+      )}
     </main>
   );
 }

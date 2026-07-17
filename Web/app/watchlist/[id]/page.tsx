@@ -105,6 +105,11 @@ export default function WatchlistPage() {
             watchlist={watchlist}
             ownerProfile={watchlist.profiles}
             existingItems={items}
+            onUpdate={() => {
+              getWatchlist(params.id as string).then((data) => {
+                if (data) setWatchlist(data);
+              });
+            }}
           />
         ) : null
       }

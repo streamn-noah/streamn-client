@@ -10,10 +10,12 @@ export function WatchlistClientActions({
   watchlist,
   ownerProfile,
   existingItems,
+  onUpdate,
 }: {
   watchlist: any;
   ownerProfile: any;
   existingItems: any[];
+  onUpdate?: () => void;
 }) {
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
@@ -66,7 +68,8 @@ export function WatchlistClientActions({
           existingItems={existingItems}
           onClose={() => setShowAdd(false)}
           onAdded={() => {
-            router.refresh();
+            if (onUpdate) onUpdate();
+            else router.refresh();
           }}
         />
       )}
@@ -76,7 +79,8 @@ export function WatchlistClientActions({
           watchlist={watchlist}
           onClose={() => setShowInvite(false)}
           onUpdate={() => {
-            router.refresh();
+            if (onUpdate) onUpdate();
+            else router.refresh();
           }}
           onDelete={() => {
             router.push("/library");

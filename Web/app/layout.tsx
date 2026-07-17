@@ -3,7 +3,6 @@ import localFont from "next/font/local";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { LowDataProvider } from "@/components/providers/low-data-provider";
 import { ServiceWorkerRegister } from "@/components/providers/sw-register";
-import { LowDataToggle } from "@/components/streamn/low-data-toggle";
 import "./globals.css";
 
 // Mock Geist fonts to bypass Turbopack's Windows font compilation bug
@@ -67,7 +66,6 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-black" suppressHydrationWarning>
         <LowDataProvider>
           <AuthProvider>
-            <LowDataToggle />
             {children}
             <footer className="w-full py-8 mt-auto flex justify-center items-center">
               <p className="text-xs text-zinc-500">

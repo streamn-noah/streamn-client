@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Globe, Loader2, Lock, Search, Trash2, UserPlus, UsersIcon, X } from "lucide-react";
+import { Globe, Loader2, Lock, Search, Trash2, UserPlus, UsersIcon, X, Check } from "lucide-react";
+import { createPortal } from "react-dom";
 import { tmdbImage, type MediaSummary, type MediaType } from "@/lib/media";
 import { DefaultAvatarFace } from "@/components/streamn/default-avatar";
 import {
@@ -24,6 +25,20 @@ export function AddItemsModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MediaSummary[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  
+  const [addingItems, setAddingItems] = useState<Record<number, boolean>>({});
+  const [localAddedItems, setLocalAddedItems] = useState<Record<number, boolean>>({});
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setToastVisible(true);
+    setTimeout(() => {
+      setToastVisible(false);
+      setTimeout(() => setToastMessage(null), 300);
+    }, 3000);
+  };
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -46,10 +61,14 @@ export function AddItemsModal({
   }, [searchQuery]);
 
   async function handleAdd(item: MediaSummary) {
+    setAddingItems((prev) => ({ ...prev, [item.id]: true }));
     const ok = await addToWatchlist(watchlist.id, item);
-    if (ok && onAdded) {
-      onAdded();
+    if (ok) {
+      if (onAdded) onAdded();
+      showToast(`Added "${item.title}" to watchlist`);
+      setLocalAddedItems((prev) => ({ ...prev, [item.id]: true }));
     }
+    setAddingItems((prev) => ({ ...prev, [item.id]: false }));
   }
 
   return (
@@ -93,7 +112,7 @@ export function AddItemsModal({
         <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[220px]">
           {searchResults.length > 0 ? (
             searchResults.map((item) => {
-              const isAdded = existingItems.some(
+              const isAdded = localAddedItems[item.id] || existingItems.some(
                 (i) => i.media_id === item.id && i.media_type === item.mediaType
               );
 
@@ -120,15 +139,21 @@ export function AddItemsModal({
                   </div>
                   <button
                     type="button"
-                    disabled={isAdded}
+                    disabled={isAdded || addingItems[item.id]}
                     onClick={() => handleAdd(item)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    className={`px-3 py-1.5 flex items-center justify-center gap-1 rounded-full text-xs font-semibold transition-all ${
                       isAdded
                         ? "bg-white/20 text-white/60 border border-white/20 opacity-80"
-                        : "bg-white hover:bg-white/90 text-black"
+                        : "bg-white hover:bg-white/90 text-black min-w-[70px]"
                     }`}
                   >
-                    {isAdded ? "Added" : "+ Add"}
+                    {addingItems[item.id] ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : isAdded ? (
+                      "Added"
+                    ) : (
+                      "+ Add"
+                    )}
                   </button>
                 </div>
               );
@@ -144,6 +169,17 @@ export function AddItemsModal({
           )}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && typeof document !== "undefined" && createPortal(
+        <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] transition-all duration-300 ease-out ${toastVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+          <div className="flex items-center gap-2 px-4 py-3 rounded-full bg-black/90 border border-white/20 text-white shadow-2xl backdrop-blur-md">
+            <Check className="size-4 text-green-400" />
+            <span className="text-sm font-medium">{toastMessage}</span>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
