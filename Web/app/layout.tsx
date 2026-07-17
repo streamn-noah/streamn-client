@@ -4,6 +4,7 @@ import { AuthProvider } from "@/components/providers/auth-provider";
 import { LowDataProvider } from "@/components/providers/low-data-provider";
 import { ServiceWorkerRegister } from "@/components/providers/sw-register";
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import "./globals.css";
 
 // Mock Geist fonts to bypass Turbopack's Windows font compilation bug
@@ -68,6 +69,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-black" suppressHydrationWarning>
         <LowDataProvider>
           <Analytics />
+          <SpeedInsights />
           <AuthProvider>
             {children}
             <footer className="w-full py-8 mt-auto flex justify-center items-center">
