@@ -255,6 +255,7 @@ function getProxiedStreamUrl(rawUrl: string, type?: string): string {
 
   if (typeof window !== "undefined" && !cleanedUrl.startsWith(window.location.origin)) {
     const isHls = cleanedUrl.includes(".m3u8") || type === "hls" || type === "m3u8";
+    
     if (!isHls) {
       return `/api/proxy/video?url=${encodeURIComponent(cleanedUrl)}`;
     }

@@ -2,6 +2,18 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.212.215"],
+  async rewrites() {
+    return [
+      {
+        source: "/api/proxy/bcdn/:path*",
+        destination: "https://bcdn.hakunaymatata.com/:path*",
+      },
+      {
+        source: "/api/proxy/aoneroom/:path*",
+        destination: "https://api6.aoneroom.com/:path*",
+      },
+    ];
+  },
   turbopack: {
     root: process.cwd(),
   },

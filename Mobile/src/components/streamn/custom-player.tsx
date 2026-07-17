@@ -228,8 +228,15 @@ export default function CustomPlayer({
   const videoSource = useMemo(() => {
     if (!activeSource?.url) return null;
 
+    const cleanedUrl = activeSource.url.replace(/(https?:\/\/[^/]+)\/\/+/g, "$1/");
+    const isHls = cleanedUrl.includes(".m3u8") || activeSource.type === "hls" || activeSource.type === "m3u8";
+    const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'; // Default to localhost if missing
+
+    // Use proxy for MP4 streams to get the hev1 -> hvc1 conversion on iOS
+    const proxyUrl = isHls ? cleanedUrl : `${backendUrl}/api/proxy/video?url=${encodeURIComponent(cleanedUrl)}`;
+
     return {
-      uri: activeSource.url,
+      uri: proxyUrl,
       headers: {
         "User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
         "Accept": "video/mp4,video/*;q=0.9,*/*;q=0.8",
@@ -433,7 +440,6 @@ export default function CustomPlayer({
       <VideoView
         style={{ width: '100%', height: '100%', position: 'absolute' }}
         player={player}
-        allowsFullscreen={false}
         allowsPictureInPicture={false}
         nativeControls={false}
         contentFit="contain"
@@ -564,7 +570,7 @@ export default function CustomPlayer({
                 <View style={styles.lowerRight}>
                   <TouchableOpacity onPress={() => setActiveMenu('subtitles')} activeOpacity={0.8}>
                     <BlurView intensity={20} tint="light" style={styles.glassBtn}>
-                      <Icon name="subtitles-line" size={20} color="#fff" />
+                      <Icon name="closed-captioning-line" size={20} color="#fff" />
                     </BlurView>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setActiveMenu('speed')} activeOpacity={0.8}>

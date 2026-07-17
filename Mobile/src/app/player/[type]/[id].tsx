@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { WebView } from 'react-native-webview';
 import Icon from 'react-native-remix-icon';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +18,6 @@ export default function PlayerScreen() {
 
   const [item, setItem] = useState<MediaSummary | null>(null);
   const [fileSizeRange, setFileSizeRange] = useState<string | null>(null);
-  const [isH265, setIsH265] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -60,12 +58,6 @@ export default function PlayerScreen() {
           const fmt = (bestSource.type || '').toLowerCase();
           const qual = (String(bestSource.quality) || '').toLowerCase();
           const urlStr = (bestSource.url || '').toLowerCase();
-          
-          const isH265Stream = fmt.includes('265') || fmt.includes('hevc') ||
-                               qual.includes('265') || qual.includes('hevc') ||
-                               urlStr.includes('h265') || urlStr.includes('hevc');
-                               
-          setIsH265(isH265Stream);
         }
 
       } catch (err) {
@@ -88,28 +80,6 @@ export default function PlayerScreen() {
     );
   }
 
-  if (Platform.OS === 'ios' && isH265) {
-    const webUrl = `${process.env.EXPO_PUBLIC_API_URL || 'https://streamn.vercel.app'}/watch/${type}/${id}?s=${season || 1}&e=${episode || 1}`;
-    
-    return (
-      <View style={styles.container}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <WebView 
-          source={{ uri: webUrl }}
-          style={{ flex: 1 }}
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
-        />
-        <View style={[styles.iosTopBar, { paddingTop: Math.max(insets.top, 16) }]} pointerEvents="box-none">
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <BlurView intensity={20} tint="light" style={styles.glassBtn}>
-              <Icon name="close-line" size={24} color="#fff" />
-            </BlurView>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
