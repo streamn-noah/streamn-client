@@ -34,7 +34,7 @@ export function WatchPlayer({
     let isMounted = true;
     setFileSizeRange(null);
 
-    fetchStreamSources(mediaType, mediaId, season, episode, false, "download")
+    fetchStreamSources(mediaType, mediaId, season, episode, false, "playback")
       .then((res) => {
         if (!isMounted) return;
         setFileSizeRange(getFileSizeRange(res.sources));

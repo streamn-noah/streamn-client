@@ -63,6 +63,7 @@ export async function GET(request: Request) {
   const season = searchParams.get("season") ?? "1";
   const episode = searchParams.get("episode") ?? "1";
   const mode = searchParams.get("mode") === "download" ? "download" : "playback";
+  const subjectId = searchParams.get("subjectId") || undefined;
 
   if (!id || isNaN(Number(id))) {
     return NextResponse.json(
@@ -72,11 +73,6 @@ export async function GET(request: Request) {
   }
 
   let wyzieSubtitles: any[] = [];
-  try {
-    wyzieSubtitles = await fetchWyzieSubtitles(Number(id), type, Number(season), Number(episode));
-  } catch (err) {
-    console.error(err);
-  }
 
   // 1. Try MovieBox default streaming source first
   try {
@@ -94,6 +90,7 @@ export async function GET(request: Request) {
               year: mediaYear,
               season: Number(season),
               episode: Number(episode),
+              subjectId,
             })
           : await getMovieBoxStreams({
               title: mediaTitle,
@@ -101,6 +98,7 @@ export async function GET(request: Request) {
               year: mediaYear,
               season: Number(season),
               episode: Number(episode),
+              subjectId,
             });
 
       if (movieboxData && movieboxData.streams && movieboxData.streams.length > 0) {

@@ -52,6 +52,7 @@ export type MovieBoxLookupInput = {
   year?: string | null;
   season?: number;
   episode?: number;
+  subjectId?: string;
 };
 
 export interface MovieBoxResponse {
@@ -194,7 +195,9 @@ export async function getMovieBoxStreams(input: MovieBoxLookupInput): Promise<Mo
   }
 
   try {
-    const match = await resolveMovieBoxMatch(input);
+    const match = input.subjectId 
+      ? { subjectId: input.subjectId, title: input.title, type: input.type } as MovieBoxSearchItem
+      : await resolveMovieBoxMatch(input);
     if (!match) return null;
 
     const querySeason = input.type === "movie" ? 0 : input.season ?? 1;
@@ -232,7 +235,9 @@ export async function getMovieBoxDownloadSources(
       });
     }
 
-    const match = await resolveMovieBoxMatch(input);
+    const match = input.subjectId 
+      ? { subjectId: input.subjectId, title: input.title, type: input.type } as MovieBoxSearchItem
+      : await resolveMovieBoxMatch(input);
     if (!match) return null;
 
     const cachedPack = downloadPackCache.get(match.subjectId);
@@ -259,6 +264,55 @@ export async function getMovieBoxDownloadSources(
     };
   } catch (error) {
     console.error("Error in getMovieBoxDownloadSources:", error);
+    return null;
+  }
+}
+
+export async function getMovieBoxAllStreams(
+  input: MovieBoxLookupInput,
+): Promise<{ title: string; subjectId: string; episodes: { season: number; episode: number; streams: MovieBoxStream[] }[] } | null> {
+  if (!WORKER_URL) return null;
+  if (input.type === "movie") return null;
+
+  try {
+    const match = input.subjectId 
+      ? { subjectId: input.subjectId, title: input.title, type: input.type } as MovieBoxSearchItem
+      : await resolveMovieBoxMatch(input);
+    if (!match) return null;
+
+    const cachedPack = downloadPackCache.get(match.subjectId);
+    const pack =
+      cachedPack && Date.now() - cachedPack.timestamp < DOWNLOAD_PACK_TTL_MS
+        ? cachedPack.pack
+        : await fetchMovieBoxJson<MovieBoxDownloadPack>(`/download/${match.subjectId}`);
+
+    if (pack) {
+      downloadPackCache.set(match.subjectId, { pack, timestamp: Date.now() });
+    }
+
+    const allEpisodes: { season: number; episode: number; streams: MovieBoxStream[] }[] = [];
+    
+    if (pack?.seasons) {
+      for (const seasonEntry of pack.seasons) {
+        if (!seasonEntry.episodes) continue;
+        for (const ep of seasonEntry.episodes) {
+          const qualities = ep.qualities ?? ep.streams ?? [];
+          allEpisodes.push({
+            season: seasonEntry.season,
+            episode: ep.episode,
+            streams: sortStreamsByQuality(qualities),
+          });
+        }
+      }
+    }
+
+    return {
+      title: match.title,
+      subjectId: match.subjectId,
+      episodes: allEpisodes,
+    };
+  } catch (error) {
+    console.error("Error in getMovieBoxAllStreams:", error);
     return null;
   }
 }

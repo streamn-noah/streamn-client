@@ -44,6 +44,7 @@ export type StreamSourceMode = "playback" | "download";
 // the detail modal → watch page navigation without a double-fetch.
 const sourceCache = new Map<string, { data: StreamBackendResponse; timestamp: number }>();
 const CACHE_TTL_MS = 90 * 1000; // 90 seconds
+const providerIdCache = new Map<string, string>();
 
 function getCacheKey(
   type: "movie" | "tv",
@@ -82,6 +83,12 @@ export async function fetchStreamSources(
     mode,
   });
 
+  const baseKey = `${type}:${id}`;
+  const subjectId = providerIdCache.get(baseKey);
+  if (subjectId) {
+    queryParams.set("subjectId", subjectId);
+  }
+
   const endpoint = `/api/stream-source?${queryParams.toString()}`;
 
   try {
@@ -101,6 +108,10 @@ export async function fetchStreamSources(
     data.sources = Array.isArray(data.sources) ? data.sources : [];
     data.subtitles = Array.isArray(data.subtitles) ? data.subtitles : [];
 
+    if (data.responseId) {
+      providerIdCache.set(baseKey, data.responseId);
+    }
+
     sourceCache.set(key, { data, timestamp: Date.now() });
     return data;
   } catch (error) {
@@ -109,6 +120,46 @@ export async function fetchStreamSources(
       sources: [],
       subtitles: [],
     };
+  }
+}
+
+export async function prewarmStreamCache(
+  type: "movie" | "tv",
+  id: number,
+  totalEpisodes: number = 1
+): Promise<void> {
+  if (type === "movie") return;
+
+  const baseKey = `${type}:${id}`;
+  const queryParams = new URLSearchParams({ type, id: String(id) });
+  const subjectId = providerIdCache.get(baseKey);
+  if (subjectId) {
+    queryParams.set("subjectId", subjectId);
+  }
+
+  try {
+    const res = await fetch(`/api/stream-all?${queryParams.toString()}`);
+    if (!res.ok) return;
+    
+    const data = await res.json();
+    if (data.responseId) {
+      providerIdCache.set(baseKey, data.responseId);
+    }
+
+    if (Array.isArray(data.episodes)) {
+      for (const ep of data.episodes) {
+        const key = getCacheKey(type, id, ep.season, ep.episode, "playback");
+        const backendRes: StreamBackendResponse = {
+          responseId: data.responseId,
+          expiresAt: data.expiresAt,
+          sources: ep.sources || [],
+          subtitles: ep.subtitles || [],
+        };
+        sourceCache.set(key, { data: backendRes, timestamp: Date.now() });
+      }
+    }
+  } catch (err) {
+    console.error("Failed to prewarm stream cache:", err);
   }
 }
 

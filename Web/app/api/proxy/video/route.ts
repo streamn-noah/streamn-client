@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+export const runtime = "edge";
+
 /**
  * Server-side video proxy — tunnels MP4 streams from CORS-restricted CDNs
  * (e.g. bcdn.hakunaymatata.com) through our Next.js origin so the browser

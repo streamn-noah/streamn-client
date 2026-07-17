@@ -333,12 +333,12 @@ function StreamnNavInner() {
               <ChevronLeft className="size-6" />
             </button>
           ) : (
-            <>
+            <Link href="/" className="flex items-center gap-2">
               <Image src={streamnLogo} alt="Streamn Logo" className="w-6 h-6 object-contain" />
               <span className="text-xl font-extrabold tracking-tight text-white">
                 {navTitle}
               </span>
-            </>
+            </Link>
           )}
         </div>
         

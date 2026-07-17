@@ -193,7 +193,7 @@ export default function HomeScreen() {
     setSourceStatus("loading");
     setSources([]);
 
-    fetchStreamSources(activeBanner.mediaType, activeBanner.id, 1, 1, false, "download")
+    fetchStreamSources(activeBanner.mediaType, activeBanner.id, 1, 1, false, "playback")
       .then((res) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {

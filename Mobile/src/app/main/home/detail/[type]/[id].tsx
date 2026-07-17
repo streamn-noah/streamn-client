@@ -247,7 +247,7 @@ export default function MediaDetailModal() {
     setSourceStatus("loading");
     setSources([]);
 
-    fetchStreamSources(detail.mediaType, detail.id, 1, 1, false, "download")
+    fetchStreamSources(detail.mediaType, detail.id, 1, 1, false, "playback")
       .then((res: any) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {

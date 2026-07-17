@@ -54,6 +54,7 @@ export function WatchPartyPlayer({
   const [partyStatus, setPartyStatus] = useState<"lobby" | "playing">("lobby");
   const [anyoneCanControlState, setAnyoneCanControlState] = useState(anyoneCanControl);
   const [showSettings, setShowSettings] = useState(false);
+  const [showVoiceVolume, setShowVoiceVolume] = useState(false);
   const [showEndPartyModal, setShowEndPartyModal] = useState(false);
   const [hasIntentionallyEnded, setHasIntentionallyEnded] = useState(false);
 
@@ -100,8 +101,8 @@ export function WatchPartyPlayer({
     if (room.state !== ConnectionState.Connected) return;
     try {
       const payload = new TextEncoder().encode(JSON.stringify(dataObj));
-      room.localParticipant.publishData(payload, { reliable }).catch(() => {});
-    } catch (e) {}
+      room.localParticipant.publishData(payload, { reliable }).catch(() => { });
+    } catch (e) { }
   }, [room]);
 
   // Helper for Host to broadcast current player state
@@ -207,7 +208,7 @@ export function WatchPartyPlayer({
             broadcastHostSync(playerRef.current.getCurrentTime(), playerRef.current.getIsPlaying());
           }
         }
-      } catch (err) {}
+      } catch (err) { }
     };
 
     room.on(RoomEvent.DataReceived, handleDataReceived);
@@ -323,7 +324,7 @@ export function WatchPartyPlayer({
           title: `Join Watch Party: ${item.title}`,
           url: window.location.href,
         });
-      } catch (err) {}
+      } catch (err) { }
     } else {
       navigator.clipboard.writeText(window.location.href);
       alert("Invite link copied to clipboard!");
@@ -363,38 +364,35 @@ export function WatchPartyPlayer({
         .filter(isTrackReference)
         .filter((track) => !track.participant.isLocal)
         .map((track) => (
-          <AudioTrack 
-            key={track.participant.identity} 
-            trackRef={track} 
-            volume={voiceVolume} 
+          <AudioTrack
+            key={track.participant.identity}
+            trackRef={track}
+            volume={voiceVolume}
           />
         ))}
 
       {/* Top Header */}
-      <header className="flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <button onClick={onLeave} className="w-10 h-10 flex items-center justify-center rounded-xl bg-[#111115] border border-white/5 hover:bg-white/10 transition cursor-pointer">
+      <header className="flex flex-wrap items-center justify-between shrink-0 gap-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <button onClick={onLeave} className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl bg-[#111115] border border-white/5 hover:bg-white/10 transition cursor-pointer">
             <ArrowLeft className="size-4" />
           </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-white/50">Watch Party</span>
-              <span className="text-[10px] bg-white/10 text-white/70 px-2.5 py-0.5 rounded-full uppercase font-bold tracking-wider">Public</span>
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <h1 className="text-lg font-bold tracking-[0.2em]">{item.title}</h1>
-            </div>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-white whitespace-nowrap">Watch Party</h1>
+            {/* <div className="flex items-center gap-2 mt-0.5 min-w-0">
+              <h1 className="text-lg font-bold tracking-[0.2em] truncate">{item.title}</h1>
+            </div> */}
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <button onClick={() => setShowInviteModal(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111115] border border-white/5 hover:bg-white/10 transition cursor-pointer" title="Share Invite">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          <button onClick={() => setShowInviteModal(true)} className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#111115] border border-white/5 hover:bg-white/10 transition cursor-pointer" title="Share Invite">
             <Share className="size-4" />
-            <span className="text-sm font-bold">Share</span>
+            <span className="text-sm font-bold hidden sm:inline">Share</span>
           </button>
           {isEffectiveHost && (
-            <button onClick={handleEndParty} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition cursor-pointer">
+            <button onClick={handleEndParty} className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition cursor-pointer">
               <LogOut className="size-4" />
-              <span className="text-sm font-bold">End party</span>
+              <span className="text-sm font-bold hidden sm:inline">End party</span>
             </button>
           )}
         </div>
@@ -402,7 +400,7 @@ export function WatchPartyPlayer({
 
       {/* Main Content Area */}
       <div className="flex flex-col lg:flex-row flex-1 gap-6 min-h-0">
-        
+
         {/* Video Player Section */}
         <div className="flex-[2] relative rounded-2xl border border-white/5 overflow-hidden bg-black flex flex-col min-w-0 min-h-[40vh] lg:min-h-0">
           <CustomPlayer
@@ -413,13 +411,13 @@ export function WatchPartyPlayer({
             season={season}
             episode={episode}
             isWatchParty={true}
-            onWatchPartyToggle={() => {}}
+            onWatchPartyToggle={() => { }}
             showWatchPartyActive={true}
             onVideoEvent={handleVideoEvent}
             autoPlay={partyStatus === "playing"}
             hideBackButton={true}
           />
-          
+
           {/* Waiting Lobby Overlay */}
           {partyStatus === "lobby" && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center pointer-events-auto">
@@ -449,12 +447,36 @@ export function WatchPartyPlayer({
 
         {/* Right Sidebar Section */}
         <div className="w-full lg:w-[380px] flex flex-col gap-6 shrink-0 h-full lg:h-auto">
-          
+
           {/* Members Box */}
           <div className="flex-1 rounded-2xl border border-white/5 bg-[#0a0a0c] flex flex-col p-5 relative min-h-[300px]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold">Members</h2>
               <div className="flex items-center gap-2">
+                {/* Voice Volume Control */}
+                <div className="relative flex flex-col items-center">
+                  {showVoiceVolume && (
+                    <div className="absolute top-full mt-2 flex flex-col items-center bg-[#15151a] border border-white/10 rounded-xl p-4 w-40 justify-center shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 z-50 right-0 md:right-auto">
+                      <span className="text-xs text-white/50 font-bold uppercase tracking-wider mb-3">Voice Volume</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={voiceVolume}
+                        onChange={(e) => setVolume(Number(e.target.value))}
+                        className="w-full h-1.5 bg-white/20 appearance-none rounded-lg cursor-pointer accent-white"
+                        style={{
+                          background: `linear-gradient(to right, #ffffff ${voiceVolume * 100}%, rgba(255,255,255,0.2) ${voiceVolume * 100}%)`,
+                        }}
+                      />
+                    </div>
+                  )}
+                  <button onClick={() => setShowVoiceVolume(!showVoiceVolume)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition cursor-pointer" title="Voice Chat Volume">
+                    {voiceVolume === 0 ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+                  </button>
+                </div>
+
                 {isEffectiveHost && (
                   <button onClick={() => setShowSettings(!showSettings)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition cursor-pointer" title="Participant Settings">
                     <Settings className="size-4" />
@@ -483,7 +505,7 @@ export function WatchPartyPlayer({
                 </label>
               </div>
             )}
-            
+
             <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
               {participants.map((p) => {
                 const displayName = p.name || p.identity || "Guest";
@@ -493,9 +515,8 @@ export function WatchPartyPlayer({
                   <div key={p.sid} className="flex items-center justify-between p-2 rounded-xl hover:bg-white/5 transition group">
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center font-bold shadow-sm ${
-                          p.isSpeaking ? "ring-2 ring-green-500 ring-offset-2 ring-offset-[#0a0a0c]" : ""
-                        }`}>
+                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center font-bold shadow-sm ${p.isSpeaking ? "ring-2 ring-green-500 ring-offset-2 ring-offset-[#0a0a0c]" : ""
+                          }`}>
                           {displayName.charAt(0).toUpperCase()}
                         </div>
                         <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#0a0a0c] ${getQualityColor(p.connectionQuality)}`} />
@@ -507,7 +528,7 @@ export function WatchPartyPlayer({
                     </div>
                     <div className="flex items-center gap-2">
                       {isParticipantHost && <Crown className="size-4 text-yellow-500 drop-shadow-md" />}
-                      
+
                       {p.isLocal ? (
                         <button
                           onClick={toggleMic}

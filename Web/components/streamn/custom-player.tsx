@@ -477,6 +477,27 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     setLoadingSources(true);
     setSourceError(null);
 
+    const fetchWyzie = () => {
+      fetch(`/api/subtitles?type=${mediaType}&id=${mediaId}&season=${season}&episode=${episode}`)
+        .then((res) => res.json())
+        .then((subData) => {
+          if (!active) return;
+          if (subData.subtitles && subData.subtitles.length > 0) {
+            setStreamData((prev) => {
+              if (!prev) return prev;
+              const existingUrls = new Set((prev.subtitles || []).map(s => s.url));
+              const newSubs = subData.subtitles.filter((s: any) => !existingUrls.has(s.url));
+              if (newSubs.length === 0) return prev;
+              
+              const newTracks = [...(prev.subtitles || []), ...newSubs];
+              setVttTracks(newTracks);
+              return { ...prev, subtitles: newTracks };
+            });
+          }
+        })
+        .catch(console.error);
+    };
+
     const cached = getCachedStreamSources(mediaType, mediaId, season, episode);
     if (cached && cached.sources && cached.sources.length > 0) {
       setStreamData(cached);
@@ -484,6 +505,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       setVttTracks(tracks);
       if (tracks.length > 0) setSelectedSubtitle(0);
       setLoadingSources(false);
+      fetchWyzie();
       return;
     }
 
@@ -497,6 +519,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         if (!data.sources || data.sources.length === 0) {
           setSourceError("No available stream sources for this title.");
         }
+        fetchWyzie();
       })
       .catch((err) => {
         if (!active) return;
@@ -1095,7 +1118,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full bg-black overflow-hidden select-none font-sans group"
+      className="relative w-full h-full flex-1 bg-black overflow-hidden select-none font-sans group"
       onMouseMove={triggerControls}
       onClick={() => {
         setActiveMenu(null);
@@ -1267,7 +1290,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
 
       {/* Top Header Overlay */}
       <div
-        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-6 bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${
+        className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 md:p-6 bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${
           showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -1485,19 +1508,19 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
           showControls && !isBuffering && !isFallingBack && !sourceError && !loadingSources ? "opacity-100" : "opacity-0"
         }`}
       >
-        <div className="flex items-center gap-10 pointer-events-auto">
+        <div className="flex items-center gap-6 pointer-events-auto">
           {/* Rewind 10s */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               skipSeconds(-10);
             }}
-            className="text-white/90 hover:text-white transition active:scale-95 p-3 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
+            className="text-white/90 hover:text-white transition active:scale-95 p-2.5 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
             title="Rewind 10s"
           >
             <div className="relative flex items-center justify-center">
-              <RotateCcw className="size-8" />
-              <span className="absolute text-[10px] font-black top-[55%] -translate-y-1/2">10</span>
+              <RotateCcw className="size-6" />
+              <span className="absolute text-[8px] font-black top-[55%] -translate-y-1/2">10</span>
             </div>
           </button>
           
@@ -1507,13 +1530,13 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
               e.stopPropagation();
               togglePlay();
             }}
-            className="text-white/90 hover:text-white transition active:scale-95 p-5 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
+            className="text-white/90 hover:text-white transition active:scale-95 p-4 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
             title={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? (
-              <Pause className="size-12 fill-current" />
+              <Pause className="size-10 fill-current" />
             ) : (
-              <Play className="size-12 fill-current pl-1" />
+              <Play className="size-10 fill-current pl-1" />
             )}
           </button>
           
@@ -1523,12 +1546,12 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
               e.stopPropagation();
               skipSeconds(10);
             }}
-            className="text-white/90 hover:text-white transition active:scale-95 p-3 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
+            className="text-white/90 hover:text-white transition active:scale-95 p-2.5 bg-black/50 rounded-full backdrop-blur-md cursor-pointer"
             title="Forward 10s"
           >
             <div className="relative flex items-center justify-center">
-              <RotateCw className="size-8" />
-              <span className="absolute text-[10px] font-black top-[55%] -translate-y-1/2">10</span>
+              <RotateCw className="size-6" />
+              <span className="absolute text-[8px] font-black top-[55%] -translate-y-1/2">10</span>
             </div>
           </button>
         </div>
@@ -1536,7 +1559,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
 
       {/* Bottom Bar Overlay (Netflix Style) */}
       <div
-        className={`absolute bottom-0 left-0 right-0 z-30 p-6 bg-gradient-to-t from-black/95 via-black/45 to-transparent transition-opacity duration-300 ${
+        className={`absolute bottom-0 left-0 right-0 z-30 p-4 md:p-6 bg-gradient-to-t from-black/95 via-black/45 to-transparent transition-opacity duration-300 ${
           showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         onClick={(e) => e.stopPropagation()}

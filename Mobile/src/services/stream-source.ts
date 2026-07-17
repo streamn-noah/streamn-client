@@ -1,5 +1,6 @@
 import { getMovieBoxStreams, getMovieBoxDownloadSources, MovieBoxLookupInput } from './moviebox';
 import { getMediaDetail } from './tmdb';
+import { Platform } from 'react-native';
 
 export type AudioTrackItem = {
   label?: string;
@@ -136,14 +137,8 @@ export async function fetchStreamSources(
     // 3. Map MovieBoxStream to our SourceItem
     const sources: SourceItem[] = response.streams
       .filter((stream: any) => {
-        const fmt = (stream.format || '').toLowerCase();
-        const qual = (String(stream.quality) || '').toLowerCase();
-        const urlStr = (stream.url || '').toLowerCase();
-        const codec = (stream.codecName || '').toLowerCase();
-        return !fmt.includes('265') && !fmt.includes('hevc') &&
-               !qual.includes('265') && !qual.includes('hevc') &&
-               !urlStr.includes('h265') && !urlStr.includes('hevc') &&
-               !codec.includes('265') && !codec.includes('hevc');
+        // We now support H.265 on both Android (via expo-video) and iOS (via WebView)
+        return true;
       })
       .map((stream) => ({
       url: stream.url,

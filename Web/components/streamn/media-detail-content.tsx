@@ -29,7 +29,13 @@ import { WatchlistPicker } from "@/components/streamn/watchlist-picker";
 import { WatchPartyInviteModal } from "@/components/streamn/watch-party-invite-modal";
 import type { Episode, MediaDetail, MediaSummary } from "@/lib/media";
 import { cinesrcUrl, tmdbImage } from "@/lib/media";
-import { fetchStreamSources, fetchSeasonDownloadSources, type SeasonDownloadResponse, type SourceItem } from "@/lib/stream-source";
+import {
+  fetchSeasonDownloadSources,
+  fetchStreamSources,
+  prewarmStreamCache,
+  type SeasonDownloadResponse,
+  type SourceItem,
+} from "@/lib/stream-source";
 import { getWatchProgress, watchHref } from "@/lib/streamn-storage";
 import { getLikedIds, likeMedia, unlikeMedia } from "@/lib/user-actions";
 import { useLowDataMode } from "@/components/providers/low-data-provider";
@@ -694,7 +700,7 @@ export function MediaDetailContent({
     setSourceStatus("loading");
     setSources([]);
 
-    fetchStreamSources(detail.mediaType, detail.id, season, episode, false, "download")
+    fetchStreamSources(detail.mediaType, detail.id, season, episode, false, "playback")
       .then((res) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {
