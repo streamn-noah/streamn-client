@@ -32,17 +32,18 @@ export default function InvitePage() {
   const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
+    if (!params?.id) return;
     import("@/lib/user-actions").then(({ getInvite }) =>
-      getInvite(params.id).then((data) => {
+      getInvite(params.id as string).then((data) => {
         setInvite(data as InvitePayload | null);
         setLoading(false);
       }),
     );
-  }, [params.id]);
+  }, [params?.id]);
 
   async function respond(action: "accept" | "decline") {
     if (!user) {
-      router.push(`/auth?next=/invite/${params.id}`);
+      router.push(`/auth?next=/invite/${params?.id}`);
       return;
     }
 
@@ -50,7 +51,7 @@ export default function InvitePage() {
     await fetch("/api/invites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, inviteId: params.id }),
+      body: JSON.stringify({ action, inviteId: params?.id }),
     });
 
     if (action === "accept") {
