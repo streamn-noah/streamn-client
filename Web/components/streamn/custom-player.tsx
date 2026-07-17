@@ -254,14 +254,8 @@ function getProxiedStreamUrl(rawUrl: string, type?: string): string {
   }
 
   if (typeof window !== "undefined" && !cleanedUrl.startsWith(window.location.origin)) {
-    const isMobile = 
-      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
-      (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
-    
     const isHls = cleanedUrl.includes(".m3u8") || type === "hls" || type === "m3u8";
-    
-    // Bypass proxy for mobile devices (native mobile UA bypasses CDN blocks automatically)
-    if (!isHls && !isMobile) {
+    if (!isHls) {
       return `/api/proxy/video?url=${encodeURIComponent(cleanedUrl)}`;
     }
   }
