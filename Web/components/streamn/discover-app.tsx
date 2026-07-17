@@ -472,9 +472,9 @@ function StudiosSection({
 export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tab = searchParams.get("tab") || "home";
-  const genreId = Number(searchParams.get("genre"));
-  const genreType = searchParams.get("type") as "movie" | "tv";
+  const tab = searchParams?.get("tab") || "home";
+  const genreId = Number(searchParams?.get("genre"));
+  const genreType = searchParams?.get("type") as "movie" | "tv";
   const { isLowDataMode } = useLowDataMode();
 
   const [bannerIndex, setBannerIndex] = useState(0);

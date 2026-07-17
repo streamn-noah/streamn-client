@@ -24,7 +24,7 @@ export function WatchPartyClient({
   episode: number;
 }) {
   const searchParams = useSearchParams();
-  const isHost = searchParams.get("host") === "1";
+  const isHost = searchParams?.get("host") === "1";
 
   const [displayName, setDisplayName] = useState("");
   const [token, setToken] = useState("");

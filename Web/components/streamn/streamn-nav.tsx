@@ -74,7 +74,7 @@ function StreamnNavInner() {
 
   const isActive = (href: string) => {
     const [hrefPath, hrefQuery] = href.split("?");
-    const currentQuery = searchParams.toString();
+    const currentQuery = searchParams?.toString() || "";
 
     if (pathname !== hrefPath) return false;
 
@@ -100,7 +100,7 @@ function StreamnNavInner() {
     g.name.toLowerCase().includes(categorySearch.toLowerCase())
   );
 
-  const currentTab = searchParams.get("tab");
+  const currentTab = searchParams?.get("tab");
   const navTitle = pathname === "/search" ? "Search" : currentTab === "shows" ? "Series" : currentTab === "movies" ? "Movies" : "Home";
 
   return (
@@ -328,7 +328,7 @@ function StreamnNavInner() {
         aria-label="Mobile navigation"
       >
         <div className="flex items-center gap-2">
-          {pathname.startsWith("/title/") && canGoBack ? (
+          {pathname?.startsWith("/title/") && canGoBack ? (
             <button onClick={() => window.history.back()} className="flex items-center justify-center size-10 rounded-full bg-white/20 text-white backdrop-blur-md transition hover:bg-white/30">
               <ChevronLeft className="size-6" />
             </button>
