@@ -270,6 +270,11 @@ function getProxiedStreamUrl(rawUrl: string, type?: string): string {
     const isHls = cleanedUrl.includes(".m3u8") || type === "hls" || type === "m3u8";
     
     if (!isHls) {
+      const externalProxy = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL;
+      if (externalProxy && externalProxy.startsWith("http")) {
+        const baseUrl = externalProxy.endsWith("/") ? externalProxy.slice(0, -1) : externalProxy;
+        return `${baseUrl}?url=${encodeURIComponent(cleanedUrl)}`;
+      }
       return `/api/proxy/video?url=${encodeURIComponent(cleanedUrl)}`;
     }
   }
