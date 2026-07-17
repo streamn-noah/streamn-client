@@ -1137,6 +1137,8 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         ref={videoRef}
         className="w-full h-full object-contain cursor-pointer"
         preload="auto"
+        // @ts-expect-error React typings are missing referrerPolicy for video
+        referrerPolicy="no-referrer"
         onClick={(e) => {
           e.stopPropagation();
           togglePlay();
