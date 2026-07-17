@@ -10,6 +10,7 @@ import {
   getTrendingAnime,
   getTopRatedAnime,
   getTopRatedAnimeMovies,
+  discoverByGenre,
 } from "@/lib/tmdb";
 
 export default async function DiscoverPage() {
@@ -30,6 +31,12 @@ export default async function DiscoverPage() {
     trendingAnime,
     topRatedAnime,
     topRatedAnimeMovies,
+    actionMovies,
+    comedyMovies,
+    scifiMovies,
+    horrorMovies,
+    romanceMovies,
+    crimeMovies,
   ] = await Promise.all([
     getTrending("all", "week").catch(() => []),
     getTrending("movie", "week").catch(() => []),
@@ -47,10 +54,16 @@ export default async function DiscoverPage() {
     getTrendingAnime("week").catch(() => []),
     getTopRatedAnime().catch(() => []),
     getTopRatedAnimeMovies().catch(() => []),
+    discoverByGenre("movie", 28).catch(() => []),
+    discoverByGenre("movie", 35).catch(() => []),
+    discoverByGenre("movie", 878).catch(() => []),
+    discoverByGenre("movie", 27).catch(() => []),
+    discoverByGenre("movie", 10749).catch(() => []),
+    discoverByGenre("movie", 80).catch(() => []),
   ]);
 
   const bannerSource = trendingWeek
-    .filter((item) => item.backdropPath)
+    .filter((item: any) => item.backdropPath)
     .slice(0, 8);
   const bannerItems = await enrichWithLogos(bannerSource).catch(() => []);
 
@@ -67,7 +80,7 @@ export default async function DiscoverPage() {
         latestTv,
         topRatedMovies,
         topRatedTv,
-        providers: providersList.map((provider) => ({
+        providers: providersList.map((provider: any) => ({
           name: provider.name,
           slug: provider.slug,
           logoPath: provider.logoPath,
@@ -78,6 +91,12 @@ export default async function DiscoverPage() {
         trendingAnime,
         topRatedAnime,
         topRatedAnimeMovies,
+        actionMovies,
+        comedyMovies,
+        scifiMovies,
+        horrorMovies,
+        romanceMovies,
+        crimeMovies,
       }}
     />
   );

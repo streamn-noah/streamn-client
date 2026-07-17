@@ -19,11 +19,13 @@ export function WatchlistPicker({
   onAdded,
   iconOnly = false,
   menuPosition = "down",
+  customButtonClass,
 }: {
   item: MediaSummary;
   onAdded?: () => void;
   iconOnly?: boolean;
   menuPosition?: "down" | "up";
+  customButtonClass?: string;
 }) {
   const router = useRouter();
   const { user, setAuthModalOpen } = useAuth();
@@ -86,7 +88,7 @@ export function WatchlistPicker({
     <div className='watchlist-picker' ref={ref}>
       <button
         aria-label='Add to watchlist'
-        className={iconOnly ? "icon-button ghost-button" : "ghost-button"}
+        className={customButtonClass || (iconOnly ? "icon-button ghost-button" : "ghost-button")}
         onClick={() => {
           if (!requireAuth()) return;
           setOpen((value) => !value);

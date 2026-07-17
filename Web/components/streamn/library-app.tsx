@@ -27,11 +27,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { DefaultAvatarFace } from "@/components/streamn/default-avatar";
-import {
-  DetailSkeleton,
-  MediaDetailContent,
-} from "@/components/streamn/media-detail-content";
-import { ResponsiveMediaModal } from "@/components/streamn/responsive-media-modal";
 import { StreamnNav } from "@/components/streamn/streamn-nav";
 import type { Database } from "@/lib/supabase-types";
 import { tmdbImage, type MediaDetail, type MediaSummary, type MediaType } from "@/lib/media";
@@ -314,10 +309,7 @@ export function LibraryApp() {
   const [searchResults, setSearchResults] = useState<MediaSummary[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  // Media Detail Modal
-  const [selectedMedia, setSelectedMedia] = useState<MediaSummary | null>(null);
-  const [detailMedia, setDetailMedia] = useState<MediaDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+
 
   const loadData = useCallback(async () => {
     setDataLoading(true);
@@ -381,30 +373,8 @@ export function LibraryApp() {
 
   // Media detail fetcher
   async function openDetail(media: { id: number; mediaType: MediaType; title: string }) {
-    const summaryItem: MediaSummary = {
-      id: media.id,
-      mediaType: media.mediaType,
-      title: media.title,
-      subtitle: "",
-      overview: "",
-      posterPath: null,
-      backdropPath: null,
-      voteAverage: 0,
-      year: "",
-      genreIds: [],
-    };
-    setSelectedMedia(summaryItem);
-    setDetailMedia(null);
-    setDetailLoading(true);
-    try {
-      const res = await fetch(`/api/details?type=${media.mediaType}&id=${media.id}`);
-      const payload = await res.json();
-      if (res.ok) setDetailMedia(payload);
-    } catch {
-      setSelectedMedia(null);
-    } finally {
-      setDetailLoading(false);
-    }
+    const slug = (media.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    router.push(`/title/${media.mediaType}/${media.id}-${slug}`);
   }
 
   // Removal Handlers
@@ -1324,31 +1294,7 @@ export function LibraryApp() {
         </div>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────────────────────
-          MEDIA DETAIL MODAL
-         ───────────────────────────────────────────────────────────────────────────── */}
-      {selectedMedia && (
-        <ResponsiveMediaModal
-          open={Boolean(selectedMedia)}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSelectedMedia(null);
-              setDetailMedia(null);
-            }
-          }}
-          title={selectedMedia.title}
-          description={selectedMedia.overview || selectedMedia.title}
-        >
-          {detailLoading || !detailMedia ? (
-            <DetailSkeleton />
-          ) : (
-            <MediaDetailContent
-              detail={detailMedia}
-              onSelect={(item) => openDetail(item)}
-            />
-          )}
-        </ResponsiveMediaModal>
-      )}
+
     </main>
   );
 }

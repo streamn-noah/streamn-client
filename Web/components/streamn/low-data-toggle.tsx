@@ -9,7 +9,7 @@ export function LowDataToggle() {
   return (
     <button
       onClick={toggleLowDataMode}
-      className={`fixed top-4 right-4 md:top-6 md:right-6 z-50 flex items-center justify-center gap-2 px-3 py-2 rounded-full backdrop-blur-xl border transition-all duration-300 group shadow-2xl ${isLowDataMode
+      className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[100] flex items-center justify-center gap-2 px-3 py-2 rounded-full backdrop-blur-xl border transition-all duration-300 group shadow-2xl ${isLowDataMode
         ? "bg-green-500/20 border-green-500/50 text-green-400 hover:bg-green-500/30"
         : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
         }`}

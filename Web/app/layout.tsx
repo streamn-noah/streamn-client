@@ -69,6 +69,11 @@ export default function RootLayout({
           <AuthProvider>
             <LowDataToggle />
             {children}
+            <footer className="w-full py-8 mt-auto flex justify-center items-center">
+              <p className="text-xs text-zinc-500">
+                For removal or DMCA requests, please contact us: <span className="font-medium text-zinc-300">support@streamn.app</span>
+              </p>
+            </footer>
             <ServiceWorkerRegister />
           </AuthProvider>
         </LowDataProvider>

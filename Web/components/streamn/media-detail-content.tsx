@@ -4,7 +4,8 @@ import { createPortal } from "react-dom";
 
 import Image from "next/image";
 import Link from "next/link";
-import { Search, ArrowDownUp, AlertCircle,
+import {
+  Search, ArrowDownUp, AlertCircle,
   ChevronDown,
   Download,
   Film,
@@ -19,7 +20,7 @@ import { Search, ArrowDownUp, AlertCircle,
   Volume2,
   VolumeX,
   X,
- } from "lucide-react";
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -275,7 +276,7 @@ function Episodes({
     URL.revokeObjectURL(url);
   };
 
-  const searchFilteredEpisodes = searchEpisode.trim() 
+  const searchFilteredEpisodes = searchEpisode.trim()
     ? episodes.filter(ep => ep.name.toLowerCase().includes(searchEpisode.toLowerCase()) || (ep.overview && ep.overview.toLowerCase().includes(searchEpisode.toLowerCase())))
     : episodes;
   const visibleEpisodes = searchFilteredEpisodes.slice(0, visibleCount);
@@ -286,6 +287,18 @@ function Episodes({
       <div className='mb-6 flex flex-col gap-4'>
         <h3 className='section-title mb-0'>Episodes</h3>
         <div className="flex flex-row items-center gap-2 sm:gap-3 w-full overflow-x-auto no-scrollbar pb-1">
+          {/* Search Bar */}
+          <div className="relative flex-1 min-w-[160px] md:max-w-sm">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/50" />
+            <input
+              type="text"
+              placeholder="Search episode..."
+              className="w-full bg-[#0d0d0f] sm:bg-transparent border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 h-10"
+              onChange={(e) => setSearchEpisode(e.target.value)}
+            />
+          </div>
+
+
           {/* Season Dropdown */}
           <label className='relative shrink-0'>
             <span className='sr-only'>Choose season</span>
@@ -304,22 +317,10 @@ function Episodes({
             <ChevronDown className='pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/55' />
           </label>
 
-          {/* Search Bar */}
-          <div className="relative flex-1 min-w-[160px] md:max-w-sm">
-             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/50" />
-             <input 
-               type="text" 
-               placeholder="Search episode..." 
-               className="w-full bg-[#0d0d0f] sm:bg-transparent border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-white placeholder-white/50 outline-none focus:border-white/30 h-10"
-               onChange={(e) => setSearchEpisode(e.target.value)}
-             />
-          </div>
 
-          {/* Sort Button */}
-          <button className="shrink-0 flex items-center justify-center rounded-xl border border-white/10 bg-[#0d0d0f] sm:bg-transparent p-2 text-white/50 hover:bg-white/10 hover:text-white transition h-10 w-10">
-             <ArrowDownUp className="size-4" />
-          </button>
-          
+
+
+
           {/* Download Season Button */}
           <button
             onClick={handleSeasonDownloadClick}
@@ -336,10 +337,10 @@ function Episodes({
           const isExpanded = expandedEpisode === episode.id;
           return (
             <div className='group block rounded-xl border border-white/10 bg-[#0d0d0f] transition-colors hover:bg-white/[0.05] overflow-hidden' key={episode.id}>
-              
+
               {/* WEB LAYOUT (hidden on mobile) */}
               <div className='hidden md:flex items-start gap-4 p-4'>
-                <Link 
+                <Link
                   href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
                   className='relative aspect-video w-56 shrink-0 overflow-hidden rounded-lg bg-white/8 block'
                 >
@@ -385,7 +386,7 @@ function Episodes({
                       {episode.episodeNumber}
                     </div>
                   </div>
-                  
+
                   <div className='flex-1 min-w-0'>
                     <h4 className='font-bold text-sm text-white line-clamp-2'>
                       {episode.name}
@@ -405,7 +406,7 @@ function Episodes({
                     <p className='text-xs text-white/60 leading-relaxed mb-4'>
                       {episode.overview || "No episode description available."}
                     </p>
-                    
+
                     <div className='flex items-center gap-3'>
                       <Link href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`} className='flex-1 flex justify-center items-center gap-2 rounded-full bg-white text-black py-2 text-sm font-bold shadow-xl transition active:scale-95'>
                         <Play className="size-4 fill-current ml-0.5" />
@@ -977,7 +978,7 @@ export function MediaDetailContent({
                   <Download className='size-5' />
                 </button>
               )}
-              
+
               <button
                 onClick={handleShare}
                 className='w-[42px] h-[42px] rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-colors'
@@ -1031,7 +1032,7 @@ export function MediaDetailContent({
           </div>
         </section>
 
-        <section className='modal-body-entrance space-y-9 px-6 pb-10 pt-6 md:px-10 md:pl-[112px]'>
+        <section className='modal-body-entrance space-y-9 px-4 pb-10 pt-6 md:px-10 md:pl-[112px]'>
 
           {detail.episodes.length ? (
             <Episodes
@@ -1047,10 +1048,9 @@ export function MediaDetailContent({
               <h3 className='section-title'>More Like This</h3>
               <div className='grid grid-cols-2 gap-4 md:grid-cols-4'>
                 {detail.recommendations.slice(0, 8).map((item) => {
-                  const releaseDate = item.releaseDate || item.firstAirDate;
-                  const year = releaseDate ? new Date(releaseDate).getFullYear() : "";
+                  const year = item.year;
                   const typeLabel = item.mediaType === "movie" ? "MOVIE" : "SERIES";
-                  
+
                   return (
                     <button
                       className='group flex flex-col text-left'

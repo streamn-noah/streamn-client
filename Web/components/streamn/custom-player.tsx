@@ -62,6 +62,8 @@ type CustomPlayerProps = {
   onWatchPartyToggle?: () => void;
   showWatchPartyActive?: boolean;
   onVideoEvent?: (type: string, currentTime: number, duration: number) => void;
+  autoPlay?: boolean;
+  hideBackButton?: boolean;
 };
 
 // VTT Parser & Subtitle Cue Utility
@@ -288,6 +290,8 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       onWatchPartyToggle,
       showWatchPartyActive = false,
       onVideoEvent,
+      autoPlay = true,
+      hideBackButton = false,
     },
     ref
   ) {
@@ -629,7 +633,9 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         video.currentTime = initialResumeRef.current;
         initialResumeRef.current = null;
       }
-      video.play().catch(() => setIsPlaying(false));
+      if (autoPlay) {
+        video.play().catch(() => setIsPlaying(false));
+      }
       onVideoEvent?.("ready", video.currentTime, video.duration);
     };
 
@@ -681,9 +687,11 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
           initialResumeRef.current = null;
         }
 
-        video.play().catch(() => {
-          setIsPlaying(false);
-        });
+        if (autoPlay) {
+          video.play().catch(() => {
+            setIsPlaying(false);
+          });
+        }
         onVideoEvent?.("ready", video.currentTime, video.duration);
       });
 
@@ -1266,13 +1274,15 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
       >
         {/* Left: Back Arrow & Title */}
         <div className="flex items-center gap-4 text-white">
-          <button
-            onClick={() => router.back()}
-            className="p-2 rounded-full hover:bg-white/10 text-white/90 hover:text-white transition cursor-pointer"
-            aria-label="Back"
-          >
-            <ArrowLeft className="size-8" />
-          </button>
+          {!hideBackButton && (
+            <button
+              onClick={() => router.back()}
+              className="p-2 rounded-full hover:bg-white/10 text-white/90 hover:text-white transition cursor-pointer"
+              aria-label="Back"
+            >
+              <ArrowLeft className="size-8" />
+            </button>
+          )}
           <div className="flex flex-col">
             <h1 className="text-lg md:text-xl font-bold tracking-wide drop-shadow-md">
               {item.title}

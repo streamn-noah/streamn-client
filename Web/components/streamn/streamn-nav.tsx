@@ -5,22 +5,20 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useRef } from "react";
 import { DefaultAvatarFace } from "@/components/streamn/default-avatar";
 import {
-  RiHome5Line,
-  RiHome5Fill,
-  RiSearch2Line,
-  RiSearch2Fill,
-  RiTv2Line,
-  RiTv2Fill,
-  RiFilmLine,
-  RiFilmFill,
-  RiGridLine,
-  RiGridFill,
-  RiUser3Line,
-  RiUser3Fill,
-  RiArrowRightSLine,
-  RiArrowDownSLine,
-} from "@remixicon/react";
+  Home,
+  Search,
+  Tv,
+  Film,
+  LayoutGrid,
+  User,
+  ChevronRight,
+  ChevronDown,
+  Rocket,
+  ChevronLeft
+} from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
+import streamnLogo from "@/assets/images/streamn-loo.svg";
+import Image from "next/image";
 
 type Genre = { id: number; name: string };
 
@@ -33,6 +31,22 @@ function StreamnNavInner() {
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [categorySearch, setCategorySearch] = useState("");
   const categoriesRef = useRef<HTMLDivElement>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [canGoBack, setCanGoBack] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && document.referrer.includes(window.location.host)) {
+      setCanGoBack(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     fetch("/api/genres")
@@ -86,6 +100,9 @@ function StreamnNavInner() {
     g.name.toLowerCase().includes(categorySearch.toLowerCase())
   );
 
+  const currentTab = searchParams.get("tab");
+  const navTitle = pathname === "/search" ? "Search" : currentTab === "shows" ? "Series" : currentTab === "movies" ? "Movies" : "Home";
+
   return (
     <>
       {/* Desktop Sidebar Navigation */}
@@ -94,19 +111,14 @@ function StreamnNavInner() {
         aria-label="Sidebar navigation"
       >
         {/* Top Logo */}
-        <div className="flex items-center gap-3 px-2 mb-8 text-white cursor-pointer shrink-0">
+        <Link href="/" className="flex items-center gap-3 px-2 mb-8 text-white cursor-pointer shrink-0">
           <div className="w-10 h-10 flex items-center justify-center shrink-0">
-            <svg
-              viewBox="0 0 24 24"
-              className="w-7 h-7 fill-white text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]"
-            >
-              <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" />
-            </svg>
+            <Image src={streamnLogo} alt="Streamn Logo" className="w-7 h-7 object-contain transition-all duration-300" />
           </div>
           <span className="text-xl font-extrabold tracking-tight text-white opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap">
             Streamn
           </span>
-        </div>
+        </Link>
 
         {/* Navigation Links */}
         <div className="flex-1 flex flex-col gap-3">
@@ -116,9 +128,9 @@ function StreamnNavInner() {
             className="flex items-center gap-4 px-3 py-2.5 transition-colors group/item"
           >
             {isActive("/discover") ? (
-              <RiHome5Fill className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+              <Home className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" fill="currentColor" />
             ) : (
-              <RiHome5Line className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
+              <Home className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
             )}
             <span
               className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[40ms] ${isActive("/discover") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
@@ -134,9 +146,9 @@ function StreamnNavInner() {
             className="flex items-center gap-4 px-3 py-2.5 transition-colors group/item"
           >
             {isActive("/") ? (
-              <RiSearch2Fill className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+              <Search className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" strokeWidth={3} />
             ) : (
-              <RiSearch2Line className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
+              <Search className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
             )}
             <span
               className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[80ms] ${isActive("/") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
@@ -152,9 +164,9 @@ function StreamnNavInner() {
             className="flex items-center gap-4 px-3 py-2.5 transition-colors group/item"
           >
             {isActive("/discover?tab=shows") ? (
-              <RiTv2Fill className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+              <Tv className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" fill="currentColor" />
             ) : (
-              <RiTv2Line className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
+              <Tv className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
             )}
             <span
               className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[120ms] ${isActive("/discover?tab=shows") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
@@ -170,15 +182,33 @@ function StreamnNavInner() {
             className="flex items-center gap-4 px-3 py-2.5 transition-colors group/item"
           >
             {isActive("/discover?tab=movies") ? (
-              <RiFilmFill className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+              <Film className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" fill="currentColor" />
             ) : (
-              <RiFilmLine className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
+              <Film className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
             )}
             <span
               className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[160ms] ${isActive("/discover?tab=movies") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
                 }`}
             >
               Movies
+            </span>
+          </Link>
+
+          {/* Anime */}
+          <Link
+            href="/discover?tab=anime"
+            className="flex items-center gap-4 px-3 py-2.5 transition-colors group/item"
+          >
+            {isActive("/discover?tab=anime") ? (
+              <Rocket className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" fill="currentColor" />
+            ) : (
+              <Rocket className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
+            )}
+            <span
+              className={`font-semibold text-sm whitespace-nowrap opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[180ms] ${isActive("/discover?tab=anime") ? "text-white font-bold" : "text-white/60 group-hover/item:text-white"
+                }`}
+            >
+              Anime
             </span>
           </Link>
 
@@ -191,9 +221,9 @@ function StreamnNavInner() {
             >
               <div className="flex items-center gap-4">
                 {categoriesOpen || isActive("/discover?tab=genre") ? (
-                  <RiGridFill className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+                  <LayoutGrid className="w-6 h-6 shrink-0 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" fill="currentColor" />
                 ) : (
-                  <RiGridLine className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
+                  <LayoutGrid className="w-6 h-6 shrink-0 text-white/60 group-hover/item:text-white transition-colors" />
                 )}
                 <span className="font-semibold text-sm whitespace-nowrap text-white/60 group-hover/item:text-white opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 delay-[200ms]">
                   Categories
@@ -201,9 +231,9 @@ function StreamnNavInner() {
               </div>
               <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                 {categoriesOpen ? (
-                  <RiArrowDownSLine className="w-4 h-4 text-white/60" />
+                  <ChevronDown className="w-4 h-4 text-white/60" />
                 ) : (
-                  <RiArrowRightSLine className="w-4 h-4 text-white/60" />
+                  <ChevronRight className="w-4 h-4 text-white/60" />
                 )}
               </div>
             </button>
@@ -277,10 +307,12 @@ function StreamnNavInner() {
           ) : (
             <button
               onClick={() => setAuthModalOpen(true)}
-              className="w-full flex items-center gap-3 px-2 py-2 text-white/70 hover:text-white transition-colors cursor-pointer"
+              className="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-white/10 transition-colors group/user"
             >
-              <RiUser3Line className="w-6 h-6 shrink-0" />
-              <span className="text-xs font-bold text-white opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap">
+              <div className="w-8 h-8 bg-white/20 rounded-full overflow-hidden shrink-0 flex items-center justify-center">
+                <User className="size-4 text-white" />
+              </div>
+              <span className="text-xs font-bold text-white/80 group-hover/user:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap truncate max-w-[130px]">
                 Sign In
               </span>
             </button>
@@ -288,85 +320,46 @@ function StreamnNavInner() {
         </div>
       </aside>
 
-      {/* Mobile Traditional Bottom Tab Bar */}
+      {/* Mobile Top Navbar */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/95 border-t border-white/10 flex items-center justify-around py-2 px-1 shadow-2xl"
+        className={`md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between py-3 px-4 transition-all duration-300 ${
+          isScrolled ? "bg-black/80 backdrop-blur-xl border-b border-white/10" : "bg-gradient-to-b from-black/80 to-transparent"
+        }`}
         aria-label="Mobile navigation"
       >
-        <Link
-          href="/discover"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/discover") ? "text-white font-bold scale-105" : "text-white/50"
-            }`}
-        >
-          {isActive("/discover") ? (
-            <RiHome5Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+        <div className="flex items-center gap-2">
+          {pathname.startsWith("/title/") && canGoBack ? (
+            <button onClick={() => window.history.back()} className="flex items-center justify-center size-10 rounded-full bg-white/20 text-white backdrop-blur-md transition hover:bg-white/30">
+              <ChevronLeft className="size-6" />
+            </button>
           ) : (
-            <RiHome5Line className="w-5 h-5" />
+            <>
+              <Image src={streamnLogo} alt="Streamn Logo" className="w-6 h-6 object-contain" />
+              <span className="text-xl font-extrabold tracking-tight text-white">
+                {navTitle}
+              </span>
+            </>
           )}
-          <span className="text-[10px]">Home</span>
-        </Link>
-
-        <Link
-          href="/search"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/search") ? "text-white font-bold scale-105" : "text-white/50"
-            }`}
-        >
-          {isActive("/search") ? (
-            <RiSearch2Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-          ) : (
-            <RiSearch2Line className="w-5 h-5" />
-          )}
-          <span className="text-[10px]">Search</span>
-        </Link>
-
-        <Link
-          href="/discover?tab=shows"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/discover?tab=shows") ? "text-white font-bold scale-105" : "text-white/50"
-            }`}
-        >
-          {isActive("/discover?tab=shows") ? (
-            <RiTv2Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-          ) : (
-            <RiTv2Line className="w-5 h-5" />
-          )}
-          <span className="text-[10px]">Series</span>
-        </Link>
-
-        <Link
-          href="/discover?tab=movies"
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/discover?tab=movies") ? "text-white font-bold scale-105" : "text-white/50"
-            }`}
-        >
-          {isActive("/discover?tab=movies") ? (
-            <RiFilmFill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-          ) : (
-            <RiFilmLine className="w-5 h-5" />
-          )}
-          <span className="text-[10px]">Movies</span>
-        </Link>
-
-        {user ? (
-          <Link
-            href="/library"
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${isActive("/library") ? "text-white font-bold scale-105" : "text-white/50"
-              }`}
-          >
-            {isActive("/library") ? (
-              <RiUser3Fill className="w-5 h-5 drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
-            ) : (
-              <RiUser3Line className="w-5 h-5" />
-            )}
-            <span className="text-[10px]">My Space</span>
+        </div>
+        
+        <div className="flex items-center gap-4 text-white">
+          <Link href="/search">
+            <Search className="w-6 h-6" />
           </Link>
-        ) : (
-          <button
-            onClick={() => setAuthModalOpen(true)}
-            className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all text-white/50 hover:text-white cursor-pointer"
-          >
-            <RiUser3Line className="w-5 h-5" />
-            <span className="text-[10px]">Sign In</span>
-          </button>
-        )}
+          {user ? (
+            <Link href="/library" className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center">
+              {profile?.avatar_url ? (
+                <img alt="" src={profile.avatar_url} className="w-full h-full object-cover" />
+              ) : (
+                <DefaultAvatarFace className="size-7" />
+              )}
+            </Link>
+          ) : (
+            <button onClick={() => setAuthModalOpen(true)} className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center">
+              <User className="w-4 h-4 text-white" />
+            </button>
+          )}
+        </div>
       </nav>
     </>
   );

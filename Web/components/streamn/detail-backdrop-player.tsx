@@ -143,7 +143,7 @@ export const DetailBackdropPlayer = forwardRef<
       {imageSrc ? (
         <Image
           alt=''
-          className={`object-cover object-top transition-opacity duration-700 ${
+          className={`object-cover object-center transition-opacity duration-700 ${
             videoLoaded && !isLowDataMode ? "opacity-0" : "opacity-80"
           }`}
           fill
@@ -161,7 +161,7 @@ export const DetailBackdropPlayer = forwardRef<
           ref={iframeRef}
           onLoad={() => setVideoLoaded(true)}
           src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&enablejsapi=1&playsinline=1`}
-          className={`w-[170%] h-[170%] absolute top-0 left-1/2 -translate-x-1/2 object-cover pointer-events-none scale-125 min-w-full min-h-full transition-opacity duration-700 ${
+          className={`absolute top-1/2 left-1/2 w-[300%] h-[300%] md:w-[150%] md:h-[150%] -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity duration-700 ${
             videoLoaded ? "opacity-100" : "opacity-0"
           }`}
           allow='autoplay; encrypted-media; picture-in-picture'

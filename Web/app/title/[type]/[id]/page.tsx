@@ -30,7 +30,7 @@ export default async function TitlePage({
   }
 
   return (
-    <main className="min-h-screen bg-black text-white md:pl-[72px] pb-24 transition-all duration-300 relative">
+    <main className="min-h-screen bg-black text-white pb-24 transition-all duration-300 relative">
       <StreamnNav />
       {/* Container for slide-up transition effect */}
       <div className="w-full animate-in slide-in-from-bottom-24 fade-in duration-500">

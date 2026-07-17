@@ -27,6 +27,7 @@ import {
   watchHref,
   removeFromStorage,
   getWatchProgress,
+  getLastWatched,
   type WatchProgress,
 } from "@/lib/streamn-storage";
 import { useLowDataMode } from "@/components/providers/low-data-provider";
@@ -65,6 +66,12 @@ export type DiscoverPageData = {
   trendingAnime: MediaSummary[];
   topRatedAnime: MediaSummary[];
   topRatedAnimeMovies: MediaSummary[];
+  actionMovies: MediaSummary[];
+  comedyMovies: MediaSummary[];
+  scifiMovies: MediaSummary[];
+  horrorMovies: MediaSummary[];
+  romanceMovies: MediaSummary[];
+  crimeMovies: MediaSummary[];
 };
 
 declare global {
@@ -191,6 +198,72 @@ function MediaCard({
   );
 }
 
+function formatProgress(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(mins / 60);
+  if (hrs > 0) return `${hrs}h ${mins % 60}m watched`;
+  return `${mins}m watched`;
+}
+
+function ContinueWatchingCard({
+  item,
+  onSelect,
+  onRemove,
+}: {
+  item: WatchProgress;
+  onSelect: (item: WatchProgress) => void;
+  onRemove?: (item: WatchProgress) => void;
+}) {
+  const { isLowDataMode } = useLowDataMode();
+  const isTv = item.mediaType === "tv";
+  const title = isTv ? `S${item.seasonNumber} E${item.episodeNumber}` : item.title;
+  const subtitle = isTv ? `${item.title}  ${formatProgress(item.progressSeconds)}` : formatProgress(item.progressSeconds);
+
+  return (
+    <div
+      className="flex flex-col gap-1.5 shrink-0 w-64 sm:w-72 md:w-80 group cursor-pointer"
+      onClick={() => onSelect(item)}
+    >
+      <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-zinc-900 border border-white/5 shadow-md group-hover:-translate-y-1.5 group-hover:ring-2 group-hover:ring-white/40 group-hover:border-white/50 transition-all duration-300">
+        <Image
+          src={tmdbImage(item.backdropPath || item.posterPath, isLowDataMode ? "w500" : "w780")}
+          alt={item.title}
+          fill
+          sizes="(max-width: 768px) 260px, 320px"
+          loading={isLowDataMode ? "lazy" : undefined}
+          quality={isLowDataMode ? 60 : 75}
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        {onRemove && (
+          <button
+            className="absolute top-2 right-2 bg-black/70 rounded-full p-1.5 hover:bg-red-600 transition-colors z-20"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(item);
+            }}
+            type="button"
+            aria-label="Remove item"
+          >
+            <X className="w-3.5 h-3.5 text-white" />
+          </button>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 transition-opacity group-hover:opacity-60 pointer-events-none" />
+        <div className="absolute bottom-3 left-3 pointer-events-none">
+          <Play className="w-6 h-6 fill-white text-white drop-shadow-lg" />
+        </div>
+      </div>
+      <div className="flex flex-col gap-0.5 px-0.5">
+        <h3 className="text-white font-bold text-sm sm:text-base line-clamp-1 group-hover:text-white/90 transition-colors">
+          {title}
+        </h3>
+        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-white/50 font-medium">
+          <span>{subtitle}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Top10Card({
   item,
   rank,
@@ -229,14 +302,16 @@ function MediaRow({
   items,
   onSelect,
   isTop10 = false,
+  isContinueWatching = false,
   onRemove,
   onViewAll,
 }: {
   title: ReactNode;
-  items: MediaSummary[];
-  onSelect: (item: MediaSummary) => void;
+  items: any[];
+  onSelect: (item: any) => void;
   isTop10?: boolean;
-  onRemove?: (item: MediaSummary) => void;
+  isContinueWatching?: boolean;
+  onRemove?: (item: any) => void;
   onViewAll?: () => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -288,23 +363,36 @@ function MediaRow({
           className="flex items-center gap-3.5 sm:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
           ref={trackRef}
         >
-          {items.map((item, index) =>
-            isTop10 ? (
-              <Top10Card
-                key={`top10-${item.mediaType}-${item.id}`}
-                item={item}
-                rank={index + 1}
-                onSelect={onSelect}
-              />
-            ) : (
+          {items.map((item, index) => {
+            if (isTop10) {
+              return (
+                <Top10Card
+                  key={`top10-${item.mediaType}-${item.id}`}
+                  item={item}
+                  rank={index + 1}
+                  onSelect={onSelect}
+                />
+              );
+            }
+            if (isContinueWatching) {
+              return (
+                <ContinueWatchingCard
+                  key={`continue-${item.mediaType}-${item.id}`}
+                  item={item as WatchProgress}
+                  onSelect={onSelect}
+                  onRemove={onRemove}
+                />
+              );
+            }
+            return (
               <MediaCard
                 key={`${item.mediaType}-${item.id}`}
                 item={item}
                 onSelect={onSelect}
                 onRemove={onRemove}
               />
-            )
-          )}
+            );
+          })}
         </div>
 
         <button
@@ -395,8 +483,9 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const thumbTrackRef = useRef<HTMLDivElement>(null);
 
-  const [continueWatching, setContinueWatching] = useState<MediaSummary[]>([]);
-  
+  const [continueWatching, setContinueWatching] = useState<WatchProgress[]>([]);
+  const [becauseYouWatched, setBecauseYouWatched] = useState<MediaSummary[]>([]);
+  const [lastWatchedTitle, setLastWatchedTitle] = useState("");
 
   const [genreResults, setGenreResults] = useState<MediaSummary[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
@@ -423,6 +512,18 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
   useEffect(() => {
     setContinueWatching(getContinueWatching());
+    const lastWatched = getLastWatched();
+    if (lastWatched) {
+      setLastWatchedTitle(lastWatched.title);
+      fetch(`/api/discover/recommendations?type=${lastWatched.mediaType}&id=${lastWatched.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.results) {
+            setBecauseYouWatched(data.results);
+          }
+        })
+        .catch(console.error);
+    }
   }, []);
 
   const handleRemoveContinue = (item: MediaSummary) => {
@@ -443,8 +544,11 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
       const tv = rawBanner.filter((i) => i.mediaType === "tv");
       return tv.length ? tv : data.trendingTv.slice(0, 8);
     }
+    if (tab === "anime") {
+      return data.trendingAnime.slice(0, 8);
+    }
     return rawBanner;
-  }, [tab, data.bannerItems, data.trendingWeek, data.trendingMovies, data.trendingTv]);
+  }, [tab, data.bannerItems, data.trendingWeek, data.trendingMovies, data.trendingTv, data.trendingAnime]);
 
   const bannerCount = filteredBannerItems.length;
   const activeBanner = bannerCount > 0 ? filteredBannerItems[bannerIndex % bannerCount] : undefined;
@@ -661,6 +765,28 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
   const renderHomeRows = () => (
     <>
+      {continueWatching.length > 0 && (
+        <LazyRevealRow animationIndex={rowIndex++}>
+          <MediaRow
+            items={continueWatching}
+            onSelect={openDetail}
+            title="Continue Watching"
+            isContinueWatching
+            onRemove={handleRemoveContinue}
+          />
+        </LazyRevealRow>
+      )}
+
+      {becauseYouWatched.length > 0 && (
+        <LazyRevealRow animationIndex={rowIndex++}>
+          <MediaRow
+            items={becauseYouWatched}
+            onSelect={openDetail}
+            title={`Because you watched ${lastWatchedTitle}`}
+          />
+        </LazyRevealRow>
+      )}
+
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
           items={data.trendingMoviesToday.slice(0, 10)}
@@ -686,17 +812,6 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
         }
       />
 
-      {continueWatching.length > 0 && (
-        <LazyRevealRow animationIndex={rowIndex++}>
-          <MediaRow
-            items={continueWatching}
-            onSelect={openDetail}
-            title="Continue Watching"
-            onRemove={handleRemoveContinue}
-          />
-        </LazyRevealRow>
-      )}
-
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
           items={data.topRatedTv}
@@ -712,6 +827,62 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
           onSelect={openDetail}
           title="Top Rated Movies"
           onViewAll={() => router.push("/discover?tab=movies")}
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.actionMovies}
+          onSelect={openDetail}
+          title="Blockbuster Action"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.comedyMovies}
+          onSelect={openDetail}
+          title="Laugh Out Loud"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.scifiMovies}
+          onSelect={openDetail}
+          title="Sci-Fi & Fantasy"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.animeTv}
+          onSelect={openDetail}
+          title="Anime Series"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.horrorMovies}
+          onSelect={openDetail}
+          title="Spine-Chilling Horror"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.romanceMovies}
+          onSelect={openDetail}
+          title="Heartwarming Romance"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.crimeMovies}
+          onSelect={openDetail}
+          title="Crime Thrillers"
         />
       </LazyRevealRow>
     </>

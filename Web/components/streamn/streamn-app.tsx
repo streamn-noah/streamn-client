@@ -12,14 +12,10 @@ import {
 } from "@remixicon/react";
 import { Loader2, Tv, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  DetailSkeleton,
-  MediaDetailContent,
-} from "@/components/streamn/media-detail-content";
-import { ResponsiveMediaModal } from "@/components/streamn/responsive-media-modal";
 import { StreamnNav } from "@/components/streamn/streamn-nav";
 import { type MediaDetail, type MediaSummary, tmdbImage } from "@/lib/media";
 import { setRouletteQueue, watchHref } from "@/lib/streamn-storage";
+import { useRouter } from "next/navigation";
 
 type TabMode = "title" | "ai" | "roulette";
 
@@ -84,16 +80,14 @@ export function StreamnApp() {
   const [label, setLabel] = useState("Trending in Nigeria");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState<MediaSummary | null>(null);
-  const [detail, setDetail] = useState<MediaDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [roulettePrompt, setRoulettePrompt] = useState(roulettePrompts[0]);
+  const router = useRouter();
 
   // Initial fetch for trending items on mount
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    fetch("/api/search?mode=title&q=a")
+    fetch("/api/search?mode=trending")
       .then((res) => res.json())
       .then((data) => {
         if (mounted && data.results?.length) {
@@ -118,26 +112,8 @@ export function StreamnApp() {
   }, [tab]);
 
   async function loadDetails(item: MediaSummary) {
-    setSelected(item);
-    setDetail(null);
-    setDetailLoading(true);
-    try {
-      const response = await fetch(
-        `/api/details?type=${item.mediaType}&id=${item.id}`
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Could not load detail.");
-      setDetail(data);
-    } catch (detailError) {
-      setError(
-        detailError instanceof Error
-          ? detailError.message
-          : "Could not load detail."
-      );
-      setSelected(null);
-    } finally {
-      setDetailLoading(false);
-    }
+    const slug = (item.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    router.push(`/title/${item.mediaType}/${item.id}-${slug}`);
   }
 
   async function onSubmit(event?: FormEvent) {
@@ -196,7 +172,7 @@ export function StreamnApp() {
       <StreamnNav />
 
       {/* Top Search Bar Header Section */}
-      <section className="relative z-10 px-4 sm:px-8 md:px-12 pt-8 pb-4 max-w-[1500px]">
+      <section className="relative z-10 px-4 sm:px-8 md:px-12 pt-24 md:pt-8 pb-4 max-w-[1500px]">
         <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
           {/* Main Search Input */}
           <form
@@ -238,7 +214,7 @@ export function StreamnApp() {
           </form>
 
           {/* Search Mode Toggles (Title, AI, Roulette using Remix Icons) */}
-          <div className="flex items-center gap-2 bg-[#161a23] border border-white/10 p-1 rounded-xl shrink-0 w-fit">
+          <div className="flex items-center gap-2 bg-[#161a23] border border-white/10 p-1 rounded-xl shrink-0 w-fit mx-auto md:mx-0">
             <button
               type="button"
               onClick={() => setTab("title")}
@@ -376,21 +352,6 @@ export function StreamnApp() {
         </div>
       </section>
 
-      {/* Media Detail Modal */}
-      <ResponsiveMediaModal
-        description={selected?.overview ?? "Media details"}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null);
-        }}
-        open={Boolean(selected)}
-        title={selected?.title ?? "Details"}
-      >
-        {detailLoading || !detail ? (
-          <DetailSkeleton />
-        ) : (
-          <MediaDetailContent detail={detail} onSelect={loadDetails} />
-        )}
-      </ResponsiveMediaModal>
     </main>
   );
 }
