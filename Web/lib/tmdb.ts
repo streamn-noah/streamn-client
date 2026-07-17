@@ -450,6 +450,25 @@ export async function discoverByGenre(
   );
 }
 
+export async function discoverByOriginCountry(
+  mediaType: MediaType,
+  country: string,
+  page = 1,
+) {
+  const endpoint = mediaType === "movie" ? "/discover/movie" : "/discover/tv";
+  const data = await tmdbFetch<TmdbListResponse<TmdbMedia>>(endpoint, {
+    include_adult: false,
+    page,
+    sort_by: "popularity.desc",
+    with_origin_country: country,
+    "vote_count.gte": 10,
+  });
+
+  return uniqueByMedia(
+    data.results.map((item) => normalizeMedia(item, mediaType)).filter(Boolean) as MediaSummary[],
+  );
+}
+
 export async function getGenreList(mediaType: MediaType) {
   const data = await tmdbFetch<{ genres: { id: number; name: string }[] }>(
     `/genre/${mediaType}/list`,

@@ -81,13 +81,16 @@ function Episodes({
   mediaId,
   seasons,
   modalContainer,
+  isPrewarming = false,
 }: {
   initialEpisodes: Episode[];
   mediaId: number;
   seasons: MediaDetail["seasons"];
   modalContainer: HTMLElement | null;
+  isPrewarming?: boolean;
 }) {
   const { isLowDataMode } = useLowDataMode();
+  const router = useRouter();
   const filterAired = (eps: Episode[]) => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -338,7 +341,15 @@ function Episodes({
           </button>
         </div>
       </div>
-      <div className={`episode-list flex flex-col gap-3 ${loadingSeason ? "opacity-55" : ""}`}>
+      <div className={`episode-list relative flex flex-col gap-3 ${(loadingSeason || isPrewarming) ? "opacity-55 pointer-events-none" : ""}`}>
+        {isPrewarming && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-[2px] rounded-xl">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="size-8 animate-spin text-white drop-shadow-md" />
+              <span className="text-sm font-bold text-white drop-shadow-md">Loading Sources...</span>
+            </div>
+          </div>
+        )}
         {visibleEpisodes.map((episode) => {
           const isExpanded = expandedEpisode === episode.id;
           return (
@@ -346,9 +357,9 @@ function Episodes({
 
               {/* WEB LAYOUT (hidden on mobile) */}
               <div className='hidden md:flex items-start gap-4 p-4'>
-                <Link
-                  href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`}
-                  className='relative aspect-video w-56 shrink-0 overflow-hidden rounded-lg bg-white/8 block'
+                <button
+                  onClick={() => router.push(`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`)}
+                  className='relative aspect-video w-56 shrink-0 overflow-hidden rounded-lg bg-white/8 block cursor-pointer text-left'
                 >
                   {episode.stillPath ? (
                     <Image src={tmdbImage(episode.stillPath, isLowDataMode ? "w200" : "w300")} alt='' fill sizes='224px' loading={isLowDataMode ? "lazy" : undefined} quality={isLowDataMode ? 60 : 75} className='object-cover transition-transform duration-300 group-hover:scale-[1.03]' />
@@ -361,12 +372,15 @@ function Episodes({
                   <div className="absolute bottom-2 left-2 bg-black/80 px-2 py-0.5 rounded-md text-sm font-bold text-white backdrop-blur-md">
                     {episode.episodeNumber}
                   </div>
-                </Link>
+                </button>
 
                 <div className='flex-1 min-w-0 flex flex-col justify-center py-1 pr-4'>
-                  <Link href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`} className='truncate text-lg font-bold text-white hover:underline'>
+                  <button 
+                    onClick={() => router.push(`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`)} 
+                    className='truncate text-lg font-bold text-white hover:underline text-left cursor-pointer'
+                  >
                     {episode.name}
-                  </Link>
+                  </button>
                   <p className='mt-2 text-sm leading-relaxed text-white/60 line-clamp-2'>
                     {episode.overview || "No episode description available."}
                   </p>
@@ -414,10 +428,13 @@ function Episodes({
                     </p>
 
                     <div className='flex items-center gap-3'>
-                      <Link href={`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`} className='flex-1 flex justify-center items-center gap-2 rounded-full bg-white text-black py-2 text-sm font-bold shadow-xl transition active:scale-95'>
+                      <button 
+                        onClick={() => router.push(`/watch/tv/${mediaId}?s=${episode.seasonNumber}&e=${episode.episodeNumber}`)} 
+                        className='flex-1 flex justify-center items-center gap-2 rounded-full bg-white text-black py-2 text-sm font-bold shadow-xl transition active:scale-95 cursor-pointer'
+                      >
                         <Play className="size-4 fill-current ml-0.5" />
                         Play
-                      </Link>
+                      </button>
                       <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDownloadClick(episode); }} className='flex items-center justify-center size-10 rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition active:scale-95 shrink-0'>
                         <Download className="size-4" />
                       </button>
@@ -686,6 +703,7 @@ export function MediaDetailContent({
   const [sourceStatus, setSourceStatus] = useState<"loading" | "available" | "unavailable">("loading");
   const [sources, setSources] = useState<any[]>([]);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [isPrewarming, setIsPrewarming] = useState(false);
 
   const firstEpisode = detail.episodes[0];
   const [watchProgress, setWatchProgress] = useState(() =>
@@ -700,8 +718,15 @@ export function MediaDetailContent({
     setSourceStatus("loading");
     setSources([]);
 
-    fetchStreamSources(detail.mediaType, detail.id, season, episode, false, "playback")
-      .then((res) => {
+    const fetchInitialData = async () => {
+      try {
+        if (detail.mediaType === "tv") {
+          setIsPrewarming(true);
+          await prewarmStreamCache("tv", detail.id);
+          if (isMounted) setIsPrewarming(false);
+        }
+
+        const res = await fetchStreamSources(detail.mediaType, detail.id, season, episode, false, "playback");
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {
           setSources(res.sources);
@@ -709,21 +734,38 @@ export function MediaDetailContent({
         } else {
           setSourceStatus("unavailable");
         }
-      })
-      .catch(() => {
+      } catch (err) {
         if (isMounted) {
           setSourceStatus("unavailable");
           setSources([]);
+          setIsPrewarming(false);
         }
-      });
+      }
+    };
+
+    fetchInitialData();
 
     return () => {
       isMounted = false;
     };
-  }, [detail.id, detail.mediaType, season, episode]);
+  }, [detail.mediaType, detail.id, season, episode]);
 
   const metaLine = detailMetaLine(detail);
   const playUrl = watchHref(detail, { season, episode });
+
+  const [mainPlayLoading, setMainPlayLoading] = useState(false);
+
+  const handleMainPlay = async () => {
+    setMainPlayLoading(true);
+    try {
+      await fetchStreamSources(detail.mediaType, detail.id, season, episode, false, "playback");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setMainPlayLoading(false);
+      router.push(playUrl);
+    }
+  };
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -824,13 +866,14 @@ export function MediaDetailContent({
                   <span>Source Unavailable</span>
                 </button>
               ) : (
-                <Link
-                  className='flex items-center justify-center gap-3 bg-white text-black px-5 py-3 rounded-xl font-bold shadow-xl'
-                  href={playUrl}
+                <button
+                  onClick={handleMainPlay}
+                  disabled={mainPlayLoading}
+                  className='flex items-center justify-center gap-3 bg-white text-black px-5 py-3 rounded-xl font-bold shadow-xl disabled:opacity-70 cursor-pointer'
                 >
-                  <Play className='size-5 fill-current' />
-                  <span>{watchProgress ? "Continue Watching" : "Watch Now"}</span>
-                </Link>
+                  {mainPlayLoading ? <Loader2 className="size-5 animate-spin text-black" /> : <Play className='size-5 fill-current' />}
+                  <span>{mainPlayLoading ? "Loading..." : watchProgress ? "Continue Watching" : "Watch Now"}</span>
+                </button>
               )}
 
               <button
@@ -928,22 +971,23 @@ export function MediaDetailContent({
                   </div>
                 </button>
               ) : (
-                <Link
-                  className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl'
-                  href={playUrl}
+                <button
+                  onClick={handleMainPlay}
+                  disabled={mainPlayLoading}
+                  className='group relative flex items-center gap-3 bg-white hover:bg-white/90 text-black px-5 py-2.5 rounded-full font-bold transition-all duration-300 hover:scale-105 shadow-xl disabled:opacity-70 disabled:hover:scale-100 cursor-pointer'
                 >
                   <div className='w-7 h-7 rounded-full bg-black flex items-center justify-center text-white shrink-0 group-hover:scale-110 transition-transform'>
-                    <Play className='size-3.5 fill-current ml-0.5' />
+                    {mainPlayLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Play className='size-3.5 fill-current ml-0.5' />}
                   </div>
                   <div className='flex flex-col text-left'>
                     <span className='text-sm font-black leading-none'>
-                      {watchProgress ? "Continue Watching" : "Watch Now"}
+                      {mainPlayLoading ? "Loading..." : watchProgress ? "Continue Watching" : "Watch Now"}
                     </span>
                     <span className='text-[10px] font-bold text-black/60 uppercase tracking-wider mt-0.5'>
                       {detail.mediaType === "movie" ? "MOVIE" : `S${season} E${episode}`}
                     </span>
                   </div>
-                </Link>
+                </button>
               )}
 
               <button
@@ -962,7 +1006,13 @@ export function MediaDetailContent({
                 </div>
               </button>
 
-              <WatchlistPicker iconOnly item={detail} menuPosition='up' customButtonClass="w-[42px] h-[42px] rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-colors" />
+              <WatchlistPicker 
+                iconOnly 
+                item={detail} 
+                menuPosition='up' 
+                customButtonClass="w-[42px] h-[42px] rounded-full border flex items-center justify-center transition-colors bg-white/10 hover:bg-white/20 text-white border-white/10" 
+                activeButtonClass="w-[42px] h-[42px] rounded-full border flex items-center justify-center transition-colors bg-white text-black border-white"
+              />
 
               <button
                 aria-label={liked ? "Unlike" : "Like"}
@@ -997,7 +1047,13 @@ export function MediaDetailContent({
             {/* Mobile Action Buttons (Add, Like, Download, Share) below description */}
             <div className="flex md:hidden flex-wrap items-center mt-6 justify-between w-full px-4">
               <div className="flex flex-col items-center gap-1.5">
-                <WatchlistPicker iconOnly item={detail} menuPosition='up' customButtonClass="p-2 text-white/70 hover:text-white transition-colors" />
+                <WatchlistPicker 
+                  iconOnly 
+                  item={detail} 
+                  menuPosition='up' 
+                  customButtonClass="p-2 transition-colors text-white/70 hover:text-white"
+                  activeButtonClass="p-2 transition-colors text-white" 
+                />
                 <span className="text-[10px] font-semibold text-white/50">My List</span>
               </div>
               <div className="flex flex-col items-center gap-1.5">
@@ -1046,6 +1102,7 @@ export function MediaDetailContent({
               mediaId={detail.id}
               seasons={detail.seasons}
               modalContainer={modalContainer}
+              isPrewarming={isPrewarming}
             />
           ) : null}
 

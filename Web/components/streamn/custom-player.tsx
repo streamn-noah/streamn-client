@@ -28,6 +28,7 @@ import {
   Users,
   ListVideo,
   Film,
+  SkipForward,
 } from "lucide-react";
 import { tmdbImage, type MediaSummary, type MediaType, type Episode } from "@/lib/media";
 import {
@@ -109,23 +110,35 @@ function parseVTT(text: string): VTTCue[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line.includes("-->")) {
+      if (currentCue && currentCue.text) cues.push(currentCue);
       const parts = line.split("-->");
       const startStr = parts[0].trim();
-      const endStr = parts[1].trim().split(" ")[0];
+      const endStr = parts[1].trim().split(/\s+/)[0];
       const start = parseVTTTime(startStr);
       const end = parseVTTTime(endStr);
       currentCue = { start, end, text: "" };
     } else if (line === "") {
-      if (currentCue) {
+      if (currentCue && currentCue.text) {
         cues.push(currentCue);
         currentCue = null;
       }
     } else if (currentCue) {
-      currentCue.text += (currentCue.text ? "\n" : "") + line;
+      const cleanLine = line.replace(/<[^>]+>/g, "");
+      if (i + 1 < lines.length && lines[i + 1].includes("-->")) {
+        if (!/^\d+$/.test(line) && cleanLine) {
+          currentCue.text += (currentCue.text ? "\n" : "") + cleanLine;
+        }
+        if (currentCue.text) cues.push(currentCue);
+        currentCue = null;
+        continue;
+      }
+      if (cleanLine) {
+        currentCue.text += (currentCue.text ? "\n" : "") + cleanLine;
+      }
     }
   }
-  if (currentCue) cues.push(currentCue);
-  return cues;
+  if (currentCue && currentCue.text) cues.push(currentCue);
+  return cues.filter(c => Number.isFinite(c.start) && Number.isFinite(c.end) && c.text.trim().length > 0);
 }
 
 function CustomSubtitlesOverlay({
@@ -264,6 +277,67 @@ function getProxiedStreamUrl(rawUrl: string, type?: string): string {
   return cleanedUrl;
 }
 
+function AutoNextEpisodeButton({ 
+  onNext, 
+  onCancel,
+  timeLeftInitial = 5
+}: { 
+  onNext: () => void; 
+  onCancel: () => void;
+  timeLeftInitial?: number;
+}) {
+  const [timeLeft, setTimeLeft] = useState(timeLeftInitial);
+  const [isHovered, setIsHovered] = useState(false);
+
+  useEffect(() => {
+    if (isHovered) return;
+    if (timeLeft <= 0) {
+      onNext();
+      return;
+    }
+    const timer = setInterval(() => {
+      setTimeLeft(prev => prev - 0.05);
+    }, 50);
+    return () => clearInterval(timer);
+  }, [timeLeft, isHovered, onNext]);
+
+  const progressPct = Math.max(0, Math.min(100, ((timeLeftInitial - timeLeft) / timeLeftInitial) * 100));
+
+  return (
+    <div 
+      className="pointer-events-auto flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <button
+        onClick={onNext}
+        className="relative overflow-hidden rounded-full border border-black/10 bg-white px-6 py-3 text-sm font-bold text-black shadow-2xl transition hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-2"
+      >
+        <div 
+          className="absolute inset-y-0 left-0 bg-neutral-300 transition-all ease-linear z-0"
+          style={{ width: isHovered ? '100%' : `${progressPct}%` }}
+        />
+        <span className="relative z-10 flex items-center gap-1">
+          Next Episode {isHovered ? "" : <span className="opacity-70 tabular-nums">({Math.ceil(timeLeft)})</span>}
+        </span>
+        <ChevronRight className="relative z-10 size-4" />
+      </button>
+
+      {isHovered && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onCancel();
+          }}
+          className="rounded-full bg-black/80 px-5 py-3 text-sm font-bold text-white shadow-xl border border-white/20 hover:bg-neutral-900 transition hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md animate-in fade-in zoom-in-95 duration-200"
+        >
+          Cancel
+        </button>
+      )}
+    </div>
+  );
+}
+
 function getProxiedSubtitleUrl(rawUrl: string): string {
   if (!rawUrl) return "";
   if (rawUrl.includes("/proxy")) {
@@ -309,9 +383,21 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   const lastTickRef = useRef(Date.now());
 
   // Data State
-  const [streamData, setStreamData] = useState<StreamBackendResponse | null>(null);
+  const [streamData, setStreamData] = useState<StreamBackendResponse | null>(() => {
+    if (typeof window !== "undefined") {
+      const cached = getCachedStreamSources(mediaType, mediaId, season, episode);
+      if (cached && cached.sources && cached.sources.length > 0) return cached;
+    }
+    return null;
+  });
   const [sourceIndex, setSourceIndex] = useState(0);
-  const [loadingSources, setLoadingSources] = useState(true);
+  const [loadingSources, setLoadingSources] = useState(() => {
+    if (typeof window !== "undefined") {
+      const cached = getCachedStreamSources(mediaType, mediaId, season, episode);
+      if (cached && cached.sources && cached.sources.length > 0) return false;
+    }
+    return true;
+  });
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [introDbSegments, setIntroDbSegments] = useState<IntroDbMediaRecord | null>(null);
 
@@ -329,18 +415,31 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showMovieRecommendations, setShowMovieRecommendations] = useState(false);
   const [hasSkippedMovieCredits, setHasSkippedMovieCredits] = useState(false);
+  const [hasCanceledNextEpisode, setHasCanceledNextEpisode] = useState(false);
 
   // Menus
   const [activeMenu, setActiveMenu] = useState<
     "settings" | "subtitles" | "audio" | "quality" | "speed" | "servers" | null
   >(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedSubtitle, setSelectedSubtitle] = useState<number>(-1); // -1 = off
+  const [selectedSubtitle, setSelectedSubtitle] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const cached = getCachedStreamSources(mediaType, mediaId, season, episode);
+      if (cached && cached.subtitles && cached.subtitles.length > 0) return 0;
+    }
+    return -1;
+  }); // -1 = off
   const [selectedQuality, setSelectedQuality] = useState<number>(-1); // -1 = Auto
   const [hlsLevels, setHlsLevels] = useState<{ id: number; name: string }[]>([]);
 
   // Subtitle track state
-  const [vttTracks, setVttTracks] = useState<SubtitleItem[]>([]);
+  const [vttTracks, setVttTracks] = useState<SubtitleItem[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = getCachedStreamSources(mediaType, mediaId, season, episode);
+      if (cached && cached.sources && cached.sources.length > 0) return cached.subtitles || [];
+    }
+    return [];
+  });
 
   useImperativeHandle(ref, () => ({
     postCommand: (func: string, args: any[] = []) => {
@@ -373,6 +472,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     setIntroDbSegments(null);
     setShowMovieRecommendations(false);
     setHasSkippedMovieCredits(false);
+    setHasCanceledNextEpisode(false);
 
     const params = new URLSearchParams({
       tmdbId: String(mediaId),
@@ -786,30 +886,15 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
   const handlePlaying = () => setIsBuffering(false);
 
   useEffect(() => {
-    if (!isBuffering) {
+    if (isBuffering || loadingSources) {
+      const int = setInterval(() => {
+        setBufferPercent(p => Math.min(p + 5, 99));
+      }, 200);
+      return () => clearInterval(int);
+    } else {
       setBufferPercent(0);
-      return;
     }
-    const interval = setInterval(() => {
-      const video = videoRef.current;
-      if (!video) return;
-      const time = video.currentTime;
-      let bufferedEnd = time;
-      for (let i = 0; i < video.buffered.length; i++) {
-        if (time >= video.buffered.start(i) && time <= video.buffered.end(i)) {
-          bufferedEnd = video.buffered.end(i);
-          break;
-        }
-      }
-      const bufferAhead = bufferedEnd - time;
-      const targetBuffer = 10;
-      let percent = Math.floor((bufferAhead / targetBuffer) * 100);
-      if (percent > 99) percent = 99;
-      if (percent < 0) percent = 0;
-      setBufferPercent(prev => (percent > prev ? percent : prev));
-    }, 250);
-    return () => clearInterval(interval);
-  }, [isBuffering]);
+  }, [isBuffering, loadingSources]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -1058,11 +1143,14 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
     setShowMovieRecommendations(true);
   }, [activeCreditsSegment, currentTime, duration, mediaType, nextHref, router]);
 
-  const showSkipIntroCta = Boolean(activeIntroSegment?.endMs) && !showMovieRecommendations;
+  const showSkipIntroCta = Boolean(activeIntroSegment?.endMs) && !showMovieRecommendations && currentTime > 1;
+  const isNearEnd = duration > 0 && duration - currentTime <= 10;
+
   const showCreditsCta =
-    Boolean(activeCreditsSegment) &&
+    (Boolean(activeCreditsSegment) || (mediaType === "tv" && isNearEnd)) &&
     !showMovieRecommendations &&
-    (mediaType === "movie" ? !hasSkippedMovieCredits : Boolean(nextHref));
+    (mediaType === "movie" ? !hasSkippedMovieCredits : (Boolean(nextHref) && !hasCanceledNextEpisode)) &&
+    currentTime > 1;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -1088,7 +1176,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
           const cues = parseVTT(text);
           cues.forEach((cue) => {
             const VTTCueClass = (window as any).VTTCue || (window as any).TextTrackCue;
-            if (VTTCueClass) {
+            if (VTTCueClass && Number.isFinite(cue.start) && Number.isFinite(cue.end)) {
               track!.addCue(new VTTCueClass(cue.start, cue.end, cue.text));
             }
           });
@@ -1201,28 +1289,35 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
 
       {(showSkipIntroCta || showCreditsCta) && (
         <div className="pointer-events-none absolute inset-x-0 bottom-32 md:bottom-24 z-40 flex justify-end px-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (showSkipIntroCta) {
-                handleSkipIntro();
-              } else {
-                handleCreditsAction();
-              }
-            }}
-            className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/80 px-5 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur-md transition hover:bg-black/90 cursor-pointer"
-          >
-            <span>
-              {showSkipIntroCta
-                ? "Skip Intro"
-                : mediaType === "tv"
-                  ? "Next Episode"
-                  : "Skip Credits"}
-            </span>
-            {showCreditsCta && mediaType === "tv" ? (
-              <ChevronRight className="size-4" />
-            ) : null}
-          </button>
+          {showCreditsCta && mediaType === "tv" ? (
+            <AutoNextEpisodeButton 
+              onNext={handleCreditsAction} 
+              onCancel={() => setHasCanceledNextEpisode(true)} 
+            />
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (showSkipIntroCta) {
+                  handleSkipIntro();
+                } else {
+                  handleCreditsAction();
+                }
+              }}
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/80 px-5 py-3 text-sm font-semibold text-white shadow-2xl backdrop-blur-md transition hover:bg-black/90 cursor-pointer"
+            >
+              <span>
+                {showSkipIntroCta
+                  ? "Skip Intro"
+                  : mediaType === "tv"
+                    ? "Next Episode"
+                    : "Skip Credits"}
+              </span>
+              {showCreditsCta && mediaType === "tv" ? (
+                <ChevronRight className="size-4" />
+              ) : null}
+            </button>
+          )}
         </div>
       )}
 
@@ -1570,6 +1665,33 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
         {/* Progress Track Bar Row */}
         <div className="flex items-center gap-4 mb-4">
           <div className="relative flex-1 group/track flex items-center h-4 cursor-pointer">
+            {/* Base track background */}
+            <div className="absolute left-0 right-0 h-1 group-hover/track:h-2 bg-white/20 rounded-lg pointer-events-none transition-all z-0" />
+            
+            {/* Intro/Outro Markers */}
+            {duration > 0 && introDbSegments?.intro?.map((seg, idx) => {
+              const startPct = (seg.startMs / 1000) / duration * 100;
+              const endPct = (seg.endMs ? seg.endMs / 1000 : duration) / duration * 100;
+              return (
+                <div
+                  key={`intro-${idx}`}
+                  className="absolute h-1 group-hover/track:h-2 bg-blue-500 rounded-lg z-0 pointer-events-none transition-all"
+                  style={{ left: `${startPct}%`, width: `${endPct - startPct}%` }}
+                />
+              );
+            })}
+            {duration > 0 && introDbSegments?.credits?.map((seg, idx) => {
+              const startPct = (seg.startMs / 1000) / duration * 100;
+              const endPct = (seg.endMs ? seg.endMs / 1000 : duration) / duration * 100;
+              return (
+                <div
+                  key={`credits-${idx}`}
+                  className="absolute h-1 group-hover/track:h-2 bg-blue-500 rounded-lg z-0 pointer-events-none transition-all"
+                  style={{ left: `${startPct}%`, width: `${endPct - startPct}%` }}
+                />
+              );
+            })}
+
             <input
               type="range"
               min="0"
@@ -1577,9 +1699,10 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
               step="0.1"
               value={currentTime}
               onChange={handleSeek}
-              className="w-full h-1 group-hover/track:h-2 bg-white/20 appearance-none rounded-lg cursor-pointer accent-white transition-all z-10"
+              className="w-full h-1 group-hover/track:h-2 appearance-none rounded-lg cursor-pointer accent-white transition-all z-10"
               style={{
-                background: `linear-gradient(to right, #ffffff ${(currentTime / (duration || 1)) * 100}%, rgba(255,255,255,0.2) ${(currentTime / (duration || 1)) * 100}%)`,
+                backgroundColor: "transparent",
+                background: `linear-gradient(to right, #ffffff ${(currentTime / (duration || 1)) * 100}%, transparent ${(currentTime / (duration || 1)) * 100}%)`,
               }}
             />
           </div>
@@ -1658,6 +1781,21 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
                 )}
               </button>
             </div>
+
+            {/* Next Episode Button */}
+            {nextHref && (
+              <button
+                className="flex items-center gap-1.5 transition hover:scale-105 cursor-pointer px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-xs ml-2 md:ml-4 shadow-md"
+                title="Next Episode"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(nextHref);
+                }}
+              >
+                <span>Next Ep</span>
+                <SkipForward className="size-4" />
+              </button>
+            )}
           </div>
 
           {/* Right Buttons Group */}
@@ -1761,7 +1899,7 @@ export const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(
 
                 {/* Episode Button with ListVideo Icon */}
                 <button
-                  className={`transition hover:scale-110 cursor-pointer p-1 rounded-md ${
+                  className={`transition hover:scale-110 cursor-pointer p-1 rounded-md ml-1 ${
                     showEpisodesPopover ? "text-white bg-white/20" : "text-white/90 hover:text-white"
                   }`}
                   title="Episodes"

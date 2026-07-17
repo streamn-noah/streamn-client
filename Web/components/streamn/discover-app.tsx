@@ -15,6 +15,7 @@ import {
   Loader2,
   X,
   Download,
+  AlertCircle,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
@@ -54,9 +55,12 @@ export type DiscoverPageData = {
   trendingMovies: MediaSummary[];
   trendingTv: MediaSummary[];
   trendingMoviesToday: MediaSummary[];
+  nollywoodMovies: MediaSummary[];
   trendingTvToday: MediaSummary[];
   latestMovies: MediaSummary[];
   latestTv: MediaSummary[];
+  nollywoodTv: MediaSummary[];
+  kdrama: MediaSummary[];
   topRatedMovies: MediaSummary[];
   topRatedTv: MediaSummary[];
   providers: { name: string; slug: string; logoPath?: string }[];
@@ -72,6 +76,8 @@ export type DiscoverPageData = {
   horrorMovies: MediaSummary[];
   romanceMovies: MediaSummary[];
   crimeMovies: MediaSummary[];
+  publicWatchlists: any[];
+  adventureMovies: MediaSummary[];
 };
 
 declare global {
@@ -408,61 +414,134 @@ function MediaRow({
   );
 }
 
-function StudiosSection({
-  onSelectProvider,
-}: {
-  onSelectProvider: (slug: string) => void;
-}) {
+
+
+function StackedWatchlistCard({ watchlist }: { watchlist: any }) {
+  const router = useRouter();
+  const { isLowDataMode } = useLowDataMode();
+  const items = watchlist.watchlist_items?.slice(0, 4) || [];
+
+  const itemCount = watchlist.watchlist_items?.length || 0;
+
+  return (
+    <div
+      onClick={() => router.push(`/watchlist/${watchlist.id}`)}
+      className="flex flex-col gap-3 shrink-0 w-[240px] sm:w-[320px] group cursor-pointer mr-0 sm:mr-4"
+    >
+      <div className="relative h-[180px] sm:h-[240px] w-full mt-2">
+        {items.length === 0 ? (
+          <div className="absolute left-0 top-0 bottom-0 aspect-[2/3] rounded-xl bg-[#1e232d] border border-white/5 flex flex-col items-center justify-center p-4 shadow-xl">
+            <Info className="size-6 text-white/50 mb-2" />
+            <span className="text-white/50 text-sm font-semibold">Empty List</span>
+          </div>
+        ) : (
+          items.map((item: any, i: number) => {
+            const zIndex = 10 - i;
+            const leftOffset = i * 15; // percentage
+            const poster = item.poster_path || item.backdrop_path;
+
+            return (
+              <div
+                key={i}
+                className="absolute top-0 bottom-0 aspect-[2/3] rounded-xl overflow-hidden shadow-[8px_0_16px_-4px_rgba(0,0,0,0.7)] border border-white/10 transition-transform duration-300 group-hover:-translate-y-2 bg-[#1e232d]"
+                style={{
+                  zIndex,
+                  left: `${leftOffset}%`,
+                  filter: `brightness(${1 - i * 0.15})`
+                }}
+              >
+                {poster ? (
+                  <Image
+                    src={tmdbImage(poster, isLowDataMode ? "w200" : "w500")}
+                    alt=""
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 144px, 160px"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-white/20 text-xs">No Image</span>
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1 px-1 mt-1">
+        <h3 className="text-white font-bold text-base sm:text-lg leading-tight line-clamp-2">
+          {watchlist.name}
+        </h3>
+        <div className="flex items-center gap-2 text-xs text-white/60 font-medium">
+          {watchlist.profiles?.avatar_url ? (
+            <img
+              src={watchlist.profiles.avatar_url}
+              className="size-5 rounded-full object-cover"
+              alt="Avatar"
+            />
+          ) : (
+            <div className="size-5 rounded-full bg-white/20 flex items-center justify-center text-[10px] text-white">
+              {watchlist.profiles?.display_name?.charAt(0).toUpperCase() || "?"}
+            </div>
+          )}
+          <span className="text-white/90 truncate max-w-[120px] font-semibold">
+            {watchlist.profiles?.display_name || "Unknown"}
+          </span>
+          <span className="text-white/40">·</span>
+          <span>{itemCount} films</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommunityWatchlistRow({ watchlists }: { watchlists: any[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
 
+  if (!watchlists || watchlists.length === 0) return null;
+
   const scrollLeft = () => {
-    trackRef.current?.scrollBy({ left: -380, behavior: "smooth" });
+    trackRef.current?.scrollBy({ left: -(window.innerWidth * 0.6), behavior: "smooth" });
   };
   const scrollRight = () => {
-    trackRef.current?.scrollBy({ left: 380, behavior: "smooth" });
+    trackRef.current?.scrollBy({ left: window.innerWidth * 0.6, behavior: "smooth" });
   };
 
   return (
-    <section className="my-8 px-1">
-      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight mb-3">
-        Studios
-      </h2>
-      <div className="relative group/studios">
+    <section className="discover-row relative my-6">
+      <div className="flex items-center justify-between mb-3 px-1">
+        <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+          Community Watchlists
+        </h2>
+      </div>
+
+      <div className="relative group/track">
         <button
-          className="absolute left-0 top-0 bottom-0 z-30 w-10 bg-gradient-to-r from-black/90 to-transparent opacity-0 group-hover/studios:opacity-100 transition-opacity flex items-center justify-center text-white"
+          className="absolute left-0 top-0 bottom-0 z-30 w-10 bg-gradient-to-r from-black/90 via-black/50 to-transparent opacity-0 group-hover/track:opacity-100 transition-opacity flex items-center justify-center text-white"
           onClick={scrollLeft}
           aria-label="Scroll left"
           type="button"
         >
-          <ChevronLeft className="w-5 h-5" />
+          <ChevronLeft className="w-6 h-6 text-white drop-shadow-md" />
         </button>
 
         <div
+          className="flex items-center gap-2 sm:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
           ref={trackRef}
-          className="flex items-center gap-4.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
         >
-          {STUDIO_NETWORKS.map((p) => (
-            <div
-              key={p.slug}
-              onClick={() => onSelectProvider(p.slug)}
-              className="relative flex items-center justify-center shrink-0 w-52 sm:w-60 md:w-64 h-24 sm:h-28 md:h-30 rounded-lg bg-[#1e232d] hover:bg-[#282f3d] border border-white/5 shadow-xl transition-all duration-300 cursor-pointer p-6 group/card hover:scale-[1.02]"
-            >
-              <img
-                src={p.logo}
-                alt={p.name}
-                className="max-h-7 sm:max-h-9 w-auto max-w-[60%] object-contain brightness-0 invert group-hover/card:brightness-100 group-hover/card:invert-0 transition-all duration-300"
-              />
-            </div>
+          {watchlists.map((list) => (
+            <StackedWatchlistCard key={`watchlist-${list.id}`} watchlist={list} />
           ))}
         </div>
 
         <button
-          className="absolute right-0 top-0 bottom-0 z-30 w-10 bg-gradient-to-l from-black/90 to-transparent opacity-0 group-hover/studios:opacity-100 transition-opacity flex items-center justify-center text-white"
+          className="absolute right-0 top-0 bottom-0 z-30 w-10 bg-gradient-to-l from-black/90 via-black/50 to-transparent opacity-0 group-hover/track:opacity-100 transition-opacity flex items-center justify-center text-white"
           onClick={scrollRight}
           aria-label="Scroll right"
           type="button"
         >
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRight className="w-6 h-6 text-white drop-shadow-md" />
         </button>
       </div>
     </section>
@@ -495,6 +574,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
     ["backend", "moviebox"].includes(process.env.NEXT_PUBLIC_STREAM_PROVIDER || "cinesrc");
 
   const [bannerSources, setBannerSources] = useState<any[]>([]);
+  const [bannerSourceStatus, setBannerSourceStatus] = useState<"loading" | "available" | "unavailable">("loading");
   const [bannerDownloadModalOpen, setBannerDownloadModalOpen] = useState(false);
   const [isDescriptionVisible, setIsDescriptionVisible] = useState(true);
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -584,25 +664,33 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
   useEffect(() => {
     if (!activeBanner) {
       setBannerSources([]);
+      setBannerSourceStatus("loading");
       return;
     }
 
     let isMounted = true;
+    setBannerSourceStatus("loading");
     setBannerSources([]);
 
     // Use season/episode from progress or default to 1
     const season = bannerProgress?.seasonNumber ?? 1;
     const episode = bannerProgress?.episodeNumber ?? 1;
 
-    fetchStreamSources(activeBanner.mediaType, activeBanner.id, season, episode, false, "download")
+    fetchStreamSources(activeBanner.mediaType, activeBanner.id, season, episode, false, "playback")
       .then((res) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {
           setBannerSources(res.sources);
+          setBannerSourceStatus("available");
+        } else {
+          setBannerSourceStatus("unavailable");
         }
       })
       .catch(() => {
-        if (isMounted) setBannerSources([]);
+        if (isMounted) {
+          setBannerSources([]);
+          setBannerSourceStatus("unavailable");
+        }
       });
 
     return () => {
@@ -787,6 +875,8 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
         </LazyRevealRow>
       )}
 
+
+
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
           items={data.trendingMoviesToday.slice(0, 10)}
@@ -806,11 +896,11 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
         />
       </LazyRevealRow>
 
-      <StudiosSection
-        onSelectProvider={(slug) =>
-          router.push(`/discover?tab=provider&provider=${slug}`)
-        }
-      />
+      {data.publicWatchlists && data.publicWatchlists.length > 0 && (
+        <LazyRevealRow animationIndex={rowIndex++}>
+          <CommunityWatchlistRow watchlists={data.publicWatchlists} />
+        </LazyRevealRow>
+      )}
 
       <LazyRevealRow animationIndex={rowIndex++}>
         <MediaRow
@@ -875,6 +965,38 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
           items={data.romanceMovies}
           onSelect={openDetail}
           title="Heartwarming Romance"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.adventureMovies}
+          onSelect={openDetail}
+          title="Voyage of Adventure"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.nollywoodMovies}
+          onSelect={openDetail}
+          title="Nollywood Movies"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.nollywoodTv}
+          onSelect={openDetail}
+          title="Nollywood Shows"
+        />
+      </LazyRevealRow>
+
+      <LazyRevealRow animationIndex={rowIndex++}>
+        <MediaRow
+          items={data.kdrama}
+          onSelect={openDetail}
+          title="K-Drama"
         />
       </LazyRevealRow>
 
@@ -1059,41 +1181,40 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent z-10" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
 
-          
+
 
           {/* Banner Copy Stack */}
           <div className="absolute inset-x-6 md:left-14 md:right-14 bottom-0 pb-6 md:pb-0 md:bottom-24 z-20 flex flex-col md:items-start gap-3.5">
             <div className="max-w-xl flex flex-col items-center text-center md:items-start md:text-left mx-auto md:mx-0 gap-3.5 w-full">
-            {activeBanner.logoPath ? (
-              <Image
-                src={tmdbImage(activeBanner.logoPath, "w500")}
-                alt={activeBanner.title}
-                width={440}
-                height={140}
-                priority
-                className="h-auto max-h-14 sm:max-h-20 md:max-h-32 w-auto max-w-[min(100%,26rem)] object-contain object-center md:object-left drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
-              />
-            ) : (
-              <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]">
-                {activeBanner.title}
-              </h1>
-            )}
-
-            <div className="flex items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md flex-wrap">
-              <span>{getBannerMetaString(activeBanner)}</span>
-              {bannerFileSizeRange && (
-                <>
-                  <span>·</span>
-                  <span className="px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20">
-                    {bannerFileSizeRange}
-                  </span>
-                </>
+              {activeBanner.logoPath ? (
+                <Image
+                  src={tmdbImage(activeBanner.logoPath, "w500")}
+                  alt={activeBanner.title}
+                  width={440}
+                  height={140}
+                  priority
+                  className="h-auto max-h-14 sm:max-h-20 md:max-h-32 w-auto max-w-[min(100%,26rem)] object-contain object-center md:object-left drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
+                />
+              ) : (
+                <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]">
+                  {activeBanner.title}
+                </h1>
               )}
-            </div>
 
-            <div className={`overflow-hidden transition-all duration-700 w-full ${
-                isDescriptionVisible ? "max-h-32 opacity-100 mt-1" : "max-h-0 opacity-0 mt-0 -mb-2 md:-mb-1"
-              }`}>
+              <div className="flex items-center gap-2 text-white/90 text-xs md:text-sm font-semibold drop-shadow-md flex-wrap">
+                <span>{getBannerMetaString(activeBanner)}</span>
+                {bannerFileSizeRange && (
+                  <>
+                    <span>·</span>
+                    <span className="px-1.5 py-0.5 rounded bg-white/15 text-[11px] font-bold text-white/90 border border-white/20">
+                      {bannerFileSizeRange}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <div className={`overflow-hidden transition-all duration-700 w-full ${isDescriptionVisible ? "max-h-32 opacity-100 mt-1" : "max-h-0 opacity-0 mt-0 -mb-2 md:-mb-1"
+                }`}>
                 <p className="text-white/80 text-xs md:text-sm line-clamp-3 leading-relaxed drop-shadow-md font-normal">
                   {activeBanner.overview}
                 </p>
@@ -1102,17 +1223,39 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
 
             {/* Action Buttons & Controls: Justified Between */}
             <div className="flex items-center justify-between w-full pt-1">
-              
+
               {/* Primary Actions */}
               <div className="flex items-center gap-3 flex-none md:flex-none">
-                <Link
-                  href={watchHref(activeBanner)}
-                  className="flex-none md:flex-none md:w-auto px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center justify-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
-                >
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                  <span className="md:hidden">Play</span>
-                  <span className="hidden md:inline">{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
-                </Link>
+                {bannerSourceStatus === "loading" ? (
+                  <button
+                    disabled
+                    className="flex-none md:flex-none md:w-auto px-5 py-2.5 rounded-full bg-white/70 text-black/70 font-bold flex items-center justify-center gap-2 shadow-2xl shrink-0 cursor-not-allowed"
+                    type="button"
+                  >
+                    <Loader2 className="w-4 h-4 animate-spin ml-0.5" />
+                    <span className="md:hidden">Loading...</span>
+                    <span className="hidden md:inline">Checking source...</span>
+                  </button>
+                ) : bannerSourceStatus === "unavailable" ? (
+                  <button
+                    disabled
+                    className="flex-none md:flex-none md:w-auto px-5 py-2.5 rounded-full bg-white/20 text-white/50 border border-white/10 font-bold flex items-center justify-center gap-2 shadow-2xl shrink-0 cursor-not-allowed"
+                    type="button"
+                  >
+                    <AlertCircle className="w-4 h-4 ml-0.5" />
+                    <span className="md:hidden">Unavailable</span>
+                    <span className="hidden md:inline">Source Unavailable</span>
+                  </button>
+                ) : (
+                  <Link
+                    href={watchHref(activeBanner)}
+                    className="flex-none md:flex-none md:w-auto px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black font-bold flex items-center justify-center gap-2 shadow-2xl transition-transform hover:scale-105 shrink-0"
+                  >
+                    <Play className="w-4 h-4 fill-current ml-0.5" />
+                    <span className="md:hidden">Play</span>
+                    <span className="hidden md:inline">{bannerProgress ? "Continue Watching" : "Watch Now"}</span>
+                  </Link>
+                )}
 
                 {bannerSources.length > 0 && (
                   <button
@@ -1242,7 +1385,7 @@ export function DiscoverApp({ data }: { data: DiscoverPageData }) {
         {tab === "genre" && renderGenreRows()}
       </section>
 
-      
+
 
       {/* Banner Download Modal */}
       {bannerDownloadModalOpen && (

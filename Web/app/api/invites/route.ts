@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
@@ -48,7 +49,8 @@ export async function POST(request: Request) {
   }
 
   if (action === "accept" && inviteId) {
-    const { data: invite } = await supabase
+    const adminClient = createAdminClient();
+    const { data: invite } = await adminClient
       .from("watchlist_invites")
       .select("*, watchlists(*, watchlist_items(*))")
       .eq("id", inviteId)
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
       }>;
     };
 
-    const { data: newList, error: listError } = await supabase
+    const { data: newList, error: listError } = await adminClient
       .from("watchlists")
       .insert({
         user_id: user.id,
@@ -90,7 +92,7 @@ export async function POST(request: Request) {
 
     const items = original.watchlist_items ?? [];
     if (items.length) {
-      await supabase.from("watchlist_items").insert(
+      await adminClient.from("watchlist_items").insert(
         items.map((item) => ({
           watchlist_id: newList.id,
           media_id: item.media_id,

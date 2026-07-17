@@ -17,7 +17,7 @@ import {
   ChevronLeft
 } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
-import streamnLogo from "@/assets/images/streamn-loo.svg";
+import streamnLogo from "@/assets/images/Vector.svg";
 import Image from "next/image";
 
 type Genre = { id: number; name: string };

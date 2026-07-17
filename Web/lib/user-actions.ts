@@ -184,7 +184,36 @@ export async function createWatchlist(
     .select()
     .single();
 
-  if (error) return null;
+  if (error) {
+    console.error("Error creating watchlist:", error);
+    return null;
+  }
+  return data;
+}
+
+export async function getWatchlist(watchlistId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("watchlists")
+    .select("*, watchlist_items(*)")
+    .eq("id", watchlistId)
+    .single();
+
+  if (error) {
+    console.error("Error in getWatchlist:", error);
+    return null;
+  }
+
+  if (data && data.user_id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", data.user_id)
+      .single();
+      
+    return { ...data, profiles: profile };
+  }
+
   return data;
 }
 
@@ -201,6 +230,56 @@ export async function getMyWatchlists(): Promise<WatchlistRow[]> {
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false });
   return data ?? [];
+}
+
+export async function isAddedToAnyWatchlist(
+  mediaId: number,
+  mediaType: "movie" | "tv",
+): Promise<boolean> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data } = await supabase
+    .from("watchlist_items")
+    .select("id, watchlists!inner(user_id)")
+    .eq("media_id", mediaId)
+    .eq("media_type", mediaType)
+    .eq("watchlists.user_id", user.id)
+    .limit(1);
+
+  return (data && data.length > 0) || false;
+}
+
+export async function getPublicWatchlists() {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("watchlists")
+    .select("*, watchlist_items(*)")
+    .eq("privacy", "public")
+    .order("updated_at", { ascending: false })
+    .limit(20);
+
+  if (!data) return [];
+
+  // Fetch profiles manually
+  const withProfiles = await Promise.all(
+    data.map(async (list) => {
+      if (list.user_id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, avatar_url")
+          .eq("id", list.user_id)
+          .single();
+        return { ...list, profiles: profile };
+      }
+      return list;
+    })
+  );
+
+  return withProfiles;
 }
 
 export async function getWatchlistItems(
@@ -272,19 +351,7 @@ export async function deleteWatchlist(watchlistId: string): Promise<boolean> {
   return !error;
 }
 
-export async function getPublicWatchlists(): Promise<
-  (WatchlistRow & { profiles: { display_name: string | null } | null })[]
-> {
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("watchlists")
-    .select("*, profiles(display_name)")
-    .eq("privacy", "public")
-    .gt("item_count", 0)
-    .order("updated_at", { ascending: false })
-    .limit(20);
-  return (data as unknown as (WatchlistRow & { profiles: { display_name: string | null } | null })[]) ?? [];
-}
+
 
 export async function addPublicWatchlistToLibrary(
   watchlistId: string,

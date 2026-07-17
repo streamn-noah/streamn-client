@@ -11,6 +11,7 @@ import {
   getTopRatedAnime,
   getTopRatedAnimeMovies,
   discoverByGenre,
+  discoverByOriginCountry,
 } from "@/lib/tmdb";
 
 export default async function DiscoverPage() {
@@ -37,6 +38,10 @@ export default async function DiscoverPage() {
     horrorMovies,
     romanceMovies,
     crimeMovies,
+    adventureMovies,
+    nollywoodMovies,
+    nollywoodTv,
+    kdrama,
   ] = await Promise.all([
     getTrending("all", "week").catch(() => []),
     getTrending("movie", "week").catch(() => []),
@@ -60,7 +65,15 @@ export default async function DiscoverPage() {
     discoverByGenre("movie", 27).catch(() => []),
     discoverByGenre("movie", 10749).catch(() => []),
     discoverByGenre("movie", 80).catch(() => []),
+    discoverByGenre("movie", 12).catch(() => []),
+    discoverByOriginCountry("movie", "NG").catch(() => []),
+    discoverByOriginCountry("tv", "NG").catch(() => []),
+    discoverByOriginCountry("tv", "KR").catch(() => []),
   ]);
+
+  const publicWatchlists = await import("@/app/actions/discover-actions")
+    .then(m => m.getPublicWatchlistsAdmin())
+    .catch(() => []);
 
   const bannerSource = trendingWeek
     .filter((item: any) => item.backdropPath)
@@ -97,6 +110,11 @@ export default async function DiscoverPage() {
         horrorMovies,
         romanceMovies,
         crimeMovies,
+        adventureMovies,
+        nollywoodMovies,
+        nollywoodTv,
+        kdrama,
+        publicWatchlists,
       }}
     />
   );

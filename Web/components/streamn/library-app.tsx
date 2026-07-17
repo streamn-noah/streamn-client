@@ -24,9 +24,12 @@ import {
   Trash2,
   UserPlus,
   X,
+  MoreHorizontal,
+  Users as UsersIcon,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { DefaultAvatarFace } from "@/components/streamn/default-avatar";
+import { WatchlistAvatarStack } from "@/components/streamn/watchlist-avatar-stack";
 import { StreamnNav } from "@/components/streamn/streamn-nav";
 import type { Database } from "@/lib/supabase-types";
 import { tmdbImage, type MediaDetail, type MediaSummary, type MediaType } from "@/lib/media";
@@ -123,39 +126,7 @@ function LibraryMediaCard({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Watchlist Avatar Stack Component
-// ─────────────────────────────────────────────────────────────────────────────
-function WatchlistAvatarStack({
-  userAvatar,
-  privacy,
-}: {
-  userAvatar?: string | null;
-  privacy?: string;
-}) {
-  return (
-    <div className="flex items-center -space-x-2 mr-1 sm:mr-2" title="Watchlist Members">
-      <div className="relative size-6 sm:size-7 rounded-full ring-2 ring-black overflow-hidden bg-zinc-800 shrink-0 z-20 shadow-sm">
-        {userAvatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img alt="Member" src={userAvatar} className="w-full h-full object-cover" />
-        ) : (
-          <DefaultAvatarFace className="w-full h-full" />
-        )}
-      </div>
 
-      <div className="relative size-6 sm:size-7 rounded-full ring-2 ring-black overflow-hidden bg-zinc-800 shrink-0 z-10 shadow-sm">
-        <DefaultAvatarFace className="w-full h-full" />
-      </div>
-
-      {privacy === "public" && (
-        <div className="size-6 sm:size-7 rounded-full ring-2 ring-black bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-white/80 shrink-0 z-0 shadow-sm">
-          +1
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Horizontal Scrolling Media Row Component
@@ -167,7 +138,8 @@ function LibraryRow({
   avatarStack,
   onViewAll,
   onAdd,
-  onInvite,
+  onMoreOptions,
+  dropdownContent,
 }: {
   title: string;
   subtitle?: string;
@@ -175,7 +147,8 @@ function LibraryRow({
   avatarStack?: React.ReactNode;
   onViewAll?: () => void;
   onAdd?: () => void;
-  onInvite?: () => void;
+  onMoreOptions?: (e: React.MouseEvent) => void;
+  dropdownContent?: React.ReactNode;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -187,7 +160,7 @@ function LibraryRow({
   };
 
   return (
-    <section className="relative my-8">
+    <section className={`relative my-8 ${dropdownContent ? "z-50" : "z-10"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
@@ -212,15 +185,14 @@ function LibraryRow({
             </button>
           )}
 
-          {onInvite && (
+          {onMoreOptions && (
             <button
-              onClick={onInvite}
-              className="flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full transition-all border border-white/5"
+              onClick={onMoreOptions}
+              className="flex items-center justify-center size-8 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all border border-white/5"
               type="button"
-              title="Share / Watchlist Settings"
+              title="More Options"
             >
-              <UserPlus className="size-3.5" />
-              <span>Invite</span>
+              <MoreHorizontal className="size-4" />
             </button>
           )}
 
@@ -235,6 +207,7 @@ function LibraryRow({
             </button>
           )}
         </div>
+        {dropdownContent}
       </div>
 
       <div className="relative group/track">
@@ -300,6 +273,12 @@ export function LibraryApp() {
   const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
 
+  // Members Modal state
+  const [membersModalWatchlist, setMembersModalWatchlist] = useState<WatchlistRow | null>(null);
+
+  // Dropdown state
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
   // View All modal state
   const [viewAllType, setViewAllType] = useState<"history" | "liked" | "watchlist" | null>(null);
   const [viewAllWatchlist, setViewAllWatchlist] = useState<WatchlistRow | null>(null);
@@ -346,8 +325,13 @@ export function LibraryApp() {
       return;
     }
     setDisplayName(profile?.display_name ?? "");
-    loadData();
-  }, [loadData, loading, profile, router, user]);
+  }, [loading, profile?.onboarding_complete, profile?.display_name, router, user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      loadData();
+    }
+  }, [user?.id, loadData]);
 
   // Handle Search for Movies/Shows
   useEffect(() => {
@@ -499,7 +483,10 @@ export function LibraryApp() {
   }
 
   return (
-    <main className="bg-black min-h-screen text-white pb-28 pl-0 md:pl-[72px] transition-all duration-300">
+    <main 
+      className="bg-black min-h-screen text-white pb-28 pl-0 md:pl-[72px] transition-all duration-300"
+      onClick={() => setActiveDropdown(null)}
+    >
       <StreamnNav />
 
       {/* Top Header Section */}
@@ -650,22 +637,65 @@ export function LibraryApp() {
                     subtitle={`${items.length} item${items.length === 1 ? "" : "s"} · ${
                       list.privacy === "public" ? "Public" : "Private"
                     }`}
-                    avatarStack={
-                      <WatchlistAvatarStack
-                        userAvatar={profile?.avatar_url}
-                        privacy={list.privacy}
-                      />
-                    }
-                    onAdd={() => {
-                      setSearchQuery("");
-                      setSearchResults([]);
-                      setAddModalWatchlist(list);
+
+                    onMoreOptions={(e) => {
+                      e.stopPropagation();
+                      setActiveDropdown(activeDropdown === list.id ? null : list.id);
                     }}
-                    onInvite={() => setInviteModalWatchlist(list)}
                     onViewAll={() => {
-                      setViewAllWatchlist(list);
-                      setViewAllType("watchlist");
+                      router.push("/watchlist/" + list.id);
                     }}
+                    dropdownContent={
+                      activeDropdown === list.id && (
+                        <div 
+                          className="absolute right-4 top-12 z-50 w-48 rounded-xl bg-zinc-900 border border-white/10 shadow-2xl py-2 overflow-hidden animate-in fade-in slide-in-from-top-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2"
+                            onClick={() => {
+                              setActiveDropdown(null);
+                              setSearchQuery("");
+                              setSearchResults([]);
+                              setAddModalWatchlist(list);
+                            }}
+                          >
+                            <Plus className="size-4 text-white/70" />
+                            Add Items
+                          </button>
+                          <button
+                            className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2"
+                            onClick={() => {
+                              setActiveDropdown(null);
+                              setMembersModalWatchlist(list);
+                            }}
+                          >
+                            <UsersIcon className="size-4 text-white/70" />
+                            Members
+                          </button>
+                          <button
+                            className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2"
+                            onClick={() => {
+                              setActiveDropdown(null);
+                              setInviteModalWatchlist(list);
+                            }}
+                          >
+                            <UserPlus className="size-4 text-white/70" />
+                            Invite & Settings
+                          </button>
+                          <button
+                            className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+                            onClick={() => {
+                              setActiveDropdown(null);
+                              handleDeleteWatchlistSubmit(list.id);
+                            }}
+                          >
+                            <Trash2 className="size-4 text-red-400/70" />
+                            Delete Watchlist
+                          </button>
+                        </div>
+                      )
+                    }
                   >
                     {items.length > 0 ? (
                       items.map((item) => (
@@ -1163,6 +1193,69 @@ export function LibraryApp() {
                   <span>Delete Watchlist</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────────
+          MEMBERS MODAL
+         ───────────────────────────────────────────────────────────────────────────── */}
+      {membersModalWatchlist && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4"
+          onClick={() => setMembersModalWatchlist(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-black border border-white/20 p-6 shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div>
+                <h3 className="font-bold text-lg text-white">Members</h3>
+                <p className="text-xs text-white/50">{membersModalWatchlist.name}</p>
+              </div>
+              <button
+                onClick={() => setMembersModalWatchlist(null)}
+                className="p-1 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                type="button"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Owner */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-full overflow-hidden bg-zinc-800 border border-white/10">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt="Owner" className="w-full h-full object-cover" />
+                    ) : (
+                      <DefaultAvatarFace className="w-full h-full" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{profile?.display_name || "You"}</p>
+                    <p className="text-xs text-white/50">Owner</p>
+                  </div>
+                </div>
+              </div>
+
+
+            </div>
+
+            <div className="pt-4 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setMembersModalWatchlist(null);
+                  setInviteModalWatchlist(membersModalWatchlist);
+                }}
+                className="w-full py-3 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 transition-all"
+              >
+                Invite More People
+              </button>
             </div>
           </div>
         </div>

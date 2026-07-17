@@ -1,12 +1,11 @@
 "use client";
 
-import Image from "next/image";
-import { BookMarked, Check, Loader2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { StreamnNav } from "@/components/streamn/streamn-nav";
-import { tmdbImage } from "@/lib/media";
+import { WatchlistDetailView, type WatchlistDetailItem } from "@/components/streamn/watchlist-detail-view";
 
 type InvitePayload = {
   id: string;
@@ -15,11 +14,12 @@ type InvitePayload = {
     description: string | null;
     watchlist_items: Array<{
       id: number;
+      media_id: number;
       title: string;
       poster_path: string | null;
       media_type: string;
     }>;
-  };
+  } | null;
 };
 
 export default function InvitePage() {
@@ -33,8 +33,8 @@ export default function InvitePage() {
 
   useEffect(() => {
     if (!params?.id) return;
-    import("@/lib/user-actions").then(({ getInvite }) =>
-      getInvite(params.id as string).then((data) => {
+    import("@/app/actions/invite-actions").then(({ getInviteAdmin }) =>
+      getInviteAdmin(params.id as string).then((data) => {
         setInvite(data as InvitePayload | null);
         setLoading(false);
       }),
@@ -71,7 +71,8 @@ export default function InvitePage() {
     );
   }
 
-  if (!invite) {
+  // Gracefully handle missing or expired invites, or missing watchlists
+  if (!invite || !invite.watchlists) {
     return (
       <main className="bg-black min-h-screen text-white flex items-center justify-center p-4 pl-0 md:pl-[72px]">
         <StreamnNav />
@@ -79,8 +80,8 @@ export default function InvitePage() {
           <div className="size-12 rounded-full bg-white/10 flex items-center justify-center mx-auto text-white">
             <X className="size-6" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">Invite Expired</h1>
-          <p className="text-sm text-white/60">This watchlist invite link is no longer valid or has expired.</p>
+          <h1 className="text-2xl font-black tracking-tight text-white">Invite Invalid</h1>
+          <p className="text-sm text-white/60">This watchlist invite link is no longer valid, expired, or the watchlist was deleted.</p>
           <button
             onClick={() => router.push("/discover")}
             className="w-full py-3 rounded-full bg-white text-black font-bold text-sm hover:bg-white/90 transition-all mt-4"
@@ -94,80 +95,45 @@ export default function InvitePage() {
   }
 
   const list = invite.watchlists;
-  const items = list.watchlist_items ?? [];
+  const items = (list.watchlist_items ?? []) as WatchlistDetailItem[];
 
   return (
-    <main className="bg-black min-h-screen text-white flex items-center justify-center p-4 sm:p-6 pl-0 md:pl-[72px] transition-all duration-300">
-      <StreamnNav />
-
-      <div className="w-full max-w-lg rounded-2xl bg-black border border-white/20 p-6 sm:p-8 shadow-2xl space-y-6">
-        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-          <div className="size-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-            <BookMarked className="size-5" />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">Watchlist Invite</h1>
-            <p className="text-xs text-white/50">Shared with you on Streamn</p>
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm sm:text-base text-white/80 font-medium leading-relaxed">
-            {accepted
-              ? "Watchlist saved to your library!"
-              : `You've been invited to save "${list.name}".`}
-          </p>
-
-          {list.description ? (
-            <p className="mt-2 text-xs sm:text-sm text-white/50 leading-relaxed">{list.description}</p>
-          ) : null}
-        </div>
-
-        {items.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {items.slice(0, 6).map((item) => (
-              <div
-                className="relative aspect-[1/1.4] w-full overflow-hidden rounded-xl bg-zinc-900 border border-white/10 shadow-md"
-                key={item.id}
-              >
-                <Image
-                  src={tmdbImage(item.poster_path, "w342")}
-                  alt={item.title}
-                  fill
-                  sizes="150px"
-                  className="object-cover"
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {accepted ? (
-          <div className="flex items-center justify-center gap-2 text-sm font-semibold text-white bg-white/10 border border-white/20 py-3 rounded-full animate-pulse">
-            <Check className="size-4 text-green-400" />
-            <span>Redirecting to Library...</span>
-          </div>
+    <WatchlistDetailView
+      title={list.name}
+      description={list.description}
+      items={items}
+      primaryAction={
+        accepted ? (
+          <button
+            disabled
+            className="flex items-center justify-center py-3 px-6 rounded-full bg-green-500/20 text-green-400 font-bold text-sm border border-green-500/30 transition-all cursor-default"
+            type="button"
+          >
+            Added to Library!
+          </button>
         ) : (
-          <div className="flex gap-3 pt-2">
-            <button
-              className="flex-1 py-3 px-6 rounded-full bg-white hover:bg-white/90 text-black font-bold text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
-              disabled={busy}
-              onClick={() => respond("accept")}
-              type="button"
-            >
-              {busy ? <Loader2 className="size-4 animate-spin text-black" /> : "Accept Invite"}
-            </button>
-            <button
-              className="flex-1 py-3 px-6 rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
-              disabled={busy}
-              onClick={() => respond("decline")}
-              type="button"
-            >
-              Decline
-            </button>
-          </div>
-        )}
-      </div>
-    </main>
+          <button
+            onClick={() => respond("accept")}
+            disabled={busy}
+            className="flex items-center justify-center py-3 px-6 rounded-full bg-white hover:bg-white/90 text-black font-bold text-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 min-w-[140px]"
+            type="button"
+          >
+            {busy ? <Loader2 className="size-4 animate-spin text-black" /> : user ? "Accept Invite" : "Log in to Accept"}
+          </button>
+        )
+      }
+      secondaryActions={
+        !accepted && (
+          <button
+            onClick={() => respond("decline")}
+            disabled={busy}
+            className="flex items-center justify-center py-3 px-6 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/10 transition-all"
+            type="button"
+          >
+            Decline
+          </button>
+        )
+      }
+    />
   );
 }

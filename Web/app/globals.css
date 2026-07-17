@@ -537,8 +537,8 @@ input {
 }
 
 .season-select option {
-  background: #070101;
-  color: white;
+  background-color: #ffffff;
+  color: #000000;
 }
 
 .episode-list {

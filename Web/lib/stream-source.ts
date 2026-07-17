@@ -236,6 +236,21 @@ export async function fetchSeasonDownloadSources(
     }
 
     const data: SeasonDownloadResponse = await res.json();
+    
+    // Prewarm cache with these sources so the watch page loads faster
+    if (Array.isArray(data.episodes)) {
+      data.episodes.forEach((ep) => {
+        const key = getCacheKey(type, id, season, ep.episode, "playback");
+        const backendRes: StreamBackendResponse = {
+          responseId: data.responseId,
+          expiresAt: data.expiresAt,
+          sources: ep.sources || [],
+          subtitles: [], // Best effort, subtitles not typically in season download payload
+        };
+        sourceCache.set(key, { data: backendRes, timestamp: Date.now() });
+      });
+    }
+
     return data;
   } catch (error) {
     console.error("Error fetching season download sources:", error);
