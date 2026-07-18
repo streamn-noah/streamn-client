@@ -2,13 +2,12 @@ import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, FlatList, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import Icon from 'react-native-remix-icon';
-import { MediaSummary } from '@/services/media';
 import MediaCard from './MediaCard';
 
 interface MediaRowProps {
   title: string;
-  items: MediaSummary[];
-  variant?: 'default' | 'top10';
+  items: any[];
+  variant?: 'default' | 'top10' | 'continueWatching' | 'communityWatchlist';
   onTitlePress?: () => void;
   shouldAnimate?: boolean;
 }
@@ -55,7 +54,7 @@ export default function MediaRow({ title, items, variant = 'default', onTitlePre
         data={items}
         horizontal
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => `${item.mediaType}-${item.id}`}
+        keyExtractor={(item, index) => item.id ? `${item.mediaType || 'row'}-${item.id}` : `row-${index}`}
         renderItem={({ item, index }) => (
           <MediaCard 
             item={item} 
@@ -63,7 +62,13 @@ export default function MediaRow({ title, items, variant = 'default', onTitlePre
             rank={variant === 'top10' ? index + 1 : undefined} 
             index={index}
             shouldAnimate={shouldAnimate}
-            onPress={() => router.push((`/main/home/detail/${item.mediaType}/${item.id}` as any))}
+            onPress={() => {
+              if (variant === 'communityWatchlist') {
+                // Not supported in mobile yet, but could be added later
+              } else if (item.mediaType && item.id) {
+                router.push((`/main/home/detail/${item.mediaType}/${item.id}` as any));
+              }
+            }}
           />
         )}
         contentContainerStyle={styles.rowList}

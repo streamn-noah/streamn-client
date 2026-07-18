@@ -3,27 +3,28 @@ import { StyleSheet, Text, View, Dimensions, TouchableOpacity, FlatList, Activit
 import { Image } from 'expo-image';
 import Icon from 'react-native-remix-icon';
 import { colors, typography } from '@/constants/theme';
-import { getTrending, getLatest, getTopRated, enrichWithLogos } from '@/services/tmdb';
+import { 
+  getTrending, 
+  getLatest, 
+  getTopRated, 
+  enrichWithLogos, 
+  getMediaDetail,
+  discoverByGenre,
+  discoverByOriginCountry,
+  getAnime,
+} from '@/services/tmdb';
 import { MediaSummary, tmdbImage, adjustDominantColor } from '@/services/media';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 import ImageColors from 'react-native-image-colors';
-import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
-import MediaCard from '@/components/MediaCard';
 import MediaRow from '@/components/MediaRow';
 import { fetchStreamSources, getFileSizeRange, SourceItem } from '@/services/stream-source';
+import { getContinueWatching, WatchProgress } from '@/services/storage';
 
 const { width, height } = Dimensions.get('window');
-const bannerHeight = height * 0.8;
-const scaleFactor = 1.3;
-const videoWidth = bannerHeight * (16 / 9) * scaleFactor;
-const videoHeight = bannerHeight * scaleFactor;
-const videoOffsetX = (videoWidth - width) / 2;
-const videoOffsetY = (videoHeight - bannerHeight) / 2;
+const bannerHeight = height * 0.75;
 
 const HomeSkeleton = () => {
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
@@ -40,13 +41,13 @@ const HomeSkeleton = () => {
   return (
     <View style={styles.container}>
       <Animated.View style={{ opacity: pulseAnim, flex: 1 }}>
-        <View style={{ width, height: height * 0.75, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+        <View style={{ width, height: bannerHeight, backgroundColor: 'rgba(255,255,255,0.1)' }} />
         {[1, 2, 3].map((row) => (
           <View key={row} style={{ marginTop: 24 }}>
             <View style={{ width: 150, height: 24, backgroundColor: 'rgba(255,255,255,0.1)', marginLeft: 16, marginBottom: 12, borderRadius: 4 }} />
             <View style={{ flexDirection: 'row', paddingHorizontal: 12 }}>
               {[1, 2, 3, 4].map((card) => (
-                <View key={card} style={{ width: 120, height: 180, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 6, borderRadius: 12 }} />
+                <View key={card} style={{ width: 130, height: 182, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 6, borderRadius: 12 }} />
               ))}
             </View>
           </View>
@@ -56,127 +57,17 @@ const HomeSkeleton = () => {
   );
 };
 
-function BackgroundYoutubePlayer({ videoId, isMuted, onProgress, onEnded }: { videoId: string, isMuted: boolean, onProgress: (progress: number) => void, onEnded: () => void }) {
-  const webviewRef = useRef<WebView>(null);
-
-  useEffect(() => {
-    if (webviewRef.current) {
-      webviewRef.current.injectJavaScript(`
-        if (typeof player !== 'undefined' && player.mute && player.unMute) {
-          ${isMuted ? 'player.mute();' : 'player.unMute();'}
-        }
-        true;
-      `);
-    }
-  }, [isMuted]);
-
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <style>
-          body { margin: 0; padding: 0; background-color: transparent; overflow: hidden; }
-          #player { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; }
-        </style>
-      </head>
-      <body>
-        <div id="player"></div>
-        <script>
-          var tag = document.createElement('script');
-          tag.src = "https://www.youtube.com/iframe_api";
-          var firstScriptTag = document.getElementsByTagName('script')[0];
-          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-          var player;
-          function onYouTubeIframeAPIReady() {
-            player = new YT.Player('player', {
-              host: 'https://www.youtube-nocookie.com',
-              videoId: '${videoId}',
-              playerVars: {
-                'playsinline': 1,
-                'autoplay': 1,
-                'mute': 1,
-                'controls': 0,
-                'rel': 0,
-                'showinfo': 0,
-                'modestbranding': 1,
-                'iv_load_policy': 3,
-                'fs': 0,
-                'origin': 'https://www.youtube-nocookie.com'
-              },
-              events: {
-                'onReady': onPlayerReady,
-                'onStateChange': onPlayerStateChange
-              }
-            });
-          }
-
-          function onPlayerReady(event) {
-            ${isMuted ? 'event.target.mute();' : 'event.target.unMute();'}
-            event.target.playVideo();
-            setInterval(function() {
-              if (player && player.getCurrentTime) {
-                 var currentTime = player.getCurrentTime();
-                 var duration = player.getDuration();
-                 if (duration > 0) {
-                   window.ReactNativeWebView.postMessage(JSON.stringify({
-                     type: 'progress',
-                     progress: currentTime / duration
-                   }));
-                 }
-              }
-            }, 500);
-          }
-
-          function onPlayerStateChange(event) {
-            if (event.data === YT.PlayerState.ENDED) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' }));
-            }
-          }
-        </script>
-      </body>
-    </html>
-  `;
-
-  return (
-    <WebView
-      ref={webviewRef}
-      source={{ html, baseUrl: 'https://www.youtube-nocookie.com' }}
-      style={{ flex: 1, backgroundColor: 'transparent' }}
-      allowsInlineMediaPlayback={true}
-      mediaPlaybackRequiresUserAction={false}
-      scrollEnabled={false}
-      showsHorizontalScrollIndicator={false}
-      showsVerticalScrollIndicator={false}
-      onMessage={(event) => {
-        try {
-          const data = JSON.parse(event.nativeEvent.data);
-          if (data.type === 'progress') {
-            onProgress(data.progress);
-          } else if (data.type === 'ended') {
-            onEnded();
-          }
-        } catch (e) { }
-      }}
-    />
-  );
-}
-
-
-
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [bannerItems, setBannerItems] = useState<MediaSummary[]>([]);
   const flatListRef = useRef<FlatList>(null);
-  const [trendingMovies, setTrendingMovies] = useState<MediaSummary[]>([]);
-  const [latestMovies, setLatestMovies] = useState<MediaSummary[]>([]);
-  const [topRatedTv, setTopRatedTv] = useState<MediaSummary[]>([]);
-  const [topRatedMovies, setTopRatedMovies] = useState<MediaSummary[]>([]);
+  
+  const [rows, setRows] = useState<any[]>([]);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const activeBanner = bannerItems[activeIndex];
@@ -184,8 +75,8 @@ export default function HomeScreen() {
   const [dominantColor, setDominantColor] = useState<string>('rgba(0,0,0,0.8)');
   const [sourceStatus, setSourceStatus] = useState<"loading" | "available" | "unavailable">("loading");
   const [sources, setSources] = useState<SourceItem[]>([]);
-  const [isMuted, setIsMuted] = useState(true);
-  const [videoProgress, setVideoProgress] = useState(0);
+
+  const [activeTab, setActiveTab] = useState<'For You' | 'Movies' | 'Shows' | 'Anime'>('For You');
 
   useEffect(() => {
     if (!activeBanner) return;
@@ -217,45 +108,136 @@ export default function HomeScreen() {
     return getFileSizeRange(sources);
   }, [sources]);
 
-  const [refreshing, setRefreshing] = useState(false);
-
-  const fetchHomeData = useCallback(async () => {
+  const fetchPrimaryData = async () => {
     try {
-      const [trendingAll, tMovies, lMovies, trTv, trMovies] = await Promise.all([
+      const [trendingAll, newMovies, cwData] = await Promise.all([
         getTrending("all", "week"),
-        getTrending("movie", "day"),
         getLatest("movie"),
-        getTopRated("tv"),
-        getTopRated("movie"),
+        getContinueWatching()
       ]);
 
       const enrichedBanner = await enrichWithLogos(trendingAll.slice(0, 5));
-
+      // Shuffle active index once initially
+      const initialActiveIndex = Math.floor(Math.random() * Math.min(enrichedBanner.length, 5));
       setBannerItems(enrichedBanner);
-      setTrendingMovies(tMovies);
-      setLatestMovies(lMovies);
-      setTopRatedTv(trTv);
-      setTopRatedMovies(trMovies);
+      setActiveIndex(initialActiveIndex);
+
+      let initialRows: any[] = [];
+      if (cwData.length > 0) {
+        initialRows.push({ key: 'continueWatching', title: 'Continue Watching', items: cwData, variant: 'continueWatching' });
+      }
+
+      initialRows.push({ key: 'trending', title: 'Trending Right Now', items: trendingAll, variant: 'default' });
+      initialRows.push({ key: 'newMovies', title: 'New Movies', items: newMovies, variant: 'default' });
+      
+      setRows(initialRows);
+
+      return { cwData, trendingAll, newMovies, enrichedBanner };
     } catch (error) {
-      console.error("Failed to load home data", error);
+      console.error("Failed to load primary data", error);
+      return null;
+    }
+  };
+
+  const fetchSecondaryData = async (cwData: WatchProgress[]) => {
+    try {
+      let becauseYouWatchedItems: MediaSummary[] = [];
+      let becauseYouWatchedTitle = '';
+
+      if (cwData.length > 0) {
+        const lastWatched = cwData[0];
+        becauseYouWatchedTitle = lastWatched.title;
+        const detail = await getMediaDetail(lastWatched.mediaType, lastWatched.id);
+        if (detail && detail.recommendations) {
+          becauseYouWatchedItems = detail.recommendations;
+        }
+      }
+
+      const [
+        nollywoodMovies,
+        topRatedSeries,
+        nollywoodShows,
+        topRatedMovies,
+        blockbusterAction,
+        kdramas,
+        laughOutLoud,
+        sciFiFantasy,
+        animeSeries,
+        horrorMovies,
+        romanceMovies,
+        adventureMovies,
+        crimeThrillers,
+      ] = await Promise.all([
+        discoverByOriginCountry("movie", "NG"),
+        getTopRated("tv"),
+        discoverByOriginCountry("tv", "NG"),
+        getTopRated("movie"),
+        discoverByGenre("movie", 28), // Action
+        discoverByOriginCountry("tv", "KR"),
+        discoverByGenre("movie", 35), // Comedy
+        discoverByGenre("movie", 878), // Sci-Fi
+        getAnime(),
+        discoverByGenre("movie", 27), // Horror
+        discoverByGenre("movie", 10749), // Romance
+        discoverByGenre("movie", 12), // Adventure
+        discoverByGenre("movie", 80), // Crime
+      ]);
+
+      setRows(prev => {
+        let updatedRows = [...prev];
+        
+        // Insert becauseYouWatched right after continue watching
+        if (becauseYouWatchedItems.length > 0) {
+          const cwIndex = updatedRows.findIndex(r => r.key === 'continueWatching');
+          updatedRows.splice(cwIndex + 1, 0, { key: 'becauseYouWatched', title: `Because you watched ${becauseYouWatchedTitle}`, items: becauseYouWatchedItems, variant: 'default' });
+        }
+
+        updatedRows = [
+          ...updatedRows,
+          { key: 'nollywoodMovies', title: 'Nollywood Movies', items: nollywoodMovies, variant: 'default' },
+          { key: 'communityWatchlist', title: 'Community Watchlist', items: [], variant: 'communityWatchlist' }, // Empty for now, as no mobile endpoint yet
+          { key: 'topRatedSeries', title: 'Top Rated Series', items: topRatedSeries.slice(0, 10), variant: 'top10' },
+          { key: 'nollywoodShows', title: 'Nollywood Shows', items: nollywoodShows, variant: 'default' },
+          { key: 'topRatedMovies', title: 'Top Rated Movies', items: topRatedMovies.slice(0, 10), variant: 'top10' },
+          { key: 'blockbusterAction', title: 'Blockbuster Action', items: blockbusterAction, variant: 'default' },
+          { key: 'kdramas', title: 'K-Dramas', items: kdramas, variant: 'default' },
+          { key: 'laughOutLoud', title: 'Laugh out Loud', items: laughOutLoud, variant: 'default' },
+          { key: 'sciFiFantasy', title: 'Sci-Fi & Fantasy', items: sciFiFantasy, variant: 'default' },
+          { key: 'animeSeries', title: 'Anime Series', items: animeSeries, variant: 'default' },
+          { key: 'spineChillingHorror', title: 'Spine-Chilling Horror', items: horrorMovies, variant: 'default' },
+          { key: 'heartwarmingRomance', title: 'Heartwarming Romance', items: romanceMovies, variant: 'default' },
+          { key: 'voyageOfAdventure', title: 'Voyage of Adventure', items: adventureMovies, variant: 'default' },
+          { key: 'crimeThrillers', title: 'Crime Thrillers', items: crimeThrillers, variant: 'default' },
+        ];
+
+        return updatedRows;
+      });
+
+    } catch (e) {
+      console.error("Failed to load secondary data", e);
+    }
+  };
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const primary = await fetchPrimaryData();
+    setLoading(false); // First paint fast
+    if (primary) {
+      // Lazy load the rest
+      fetchSecondaryData(primary.cwData);
     }
   }, []);
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    fetchHomeData().finally(() => {
-      if (mounted) setLoading(false);
-    });
-    return () => { mounted = false; };
-  }, [fetchHomeData]);
+    loadData();
+  }, [loadData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchHomeData().finally(() => {
+    loadData().finally(() => {
       setRefreshing(false);
     });
-  }, [fetchHomeData]);
+  }, [loadData]);
 
   // Dominant color extraction
   useEffect(() => {
@@ -281,23 +263,15 @@ export default function HomeScreen() {
     return () => { mounted = false; };
   }, [activeBanner]);
 
-  // Fallback 5-second interval for items without trailers
+  // Static banner timer fallback
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (!activeBanner?.trailerKey) {
-      setVideoProgress(0);
-      let ticks = 0;
-      interval = setInterval(() => {
-        ticks += 0.5;
-        setVideoProgress(Math.min(ticks / 10, 1));
-        if (ticks >= 10 && bannerItems.length > 0) {
-          const nextIndex = (activeIndex + 1) % bannerItems.length;
-          flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-        }
-      }, 500);
-    }
+    if (bannerItems.length === 0) return;
+    const interval = setInterval(() => {
+      const nextIndex = (activeIndex + 1) % bannerItems.length;
+      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+    }, 8000); // 8s per slide since it's static
     return () => clearInterval(interval);
-  }, [activeBanner, bannerItems.length, activeIndex]);
+  }, [activeIndex, bannerItems.length]);
 
   const handleScroll = (event: any) => {
     const slideSize = event.nativeEvent.layoutMeasurement.width;
@@ -322,7 +296,7 @@ export default function HomeScreen() {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 10 }).current;
 
-  if (loading) {
+  if (loading && rows.length === 0) {
     return <HomeSkeleton />;
   }
 
@@ -339,7 +313,7 @@ export default function HomeScreen() {
     };
 
     const genreStr = item.genreIds?.map(id => genreMap[id]).filter(Boolean).slice(0, 2).join(' · ') || type;
-    return `★ ${rating} · ${year} · ${genreStr} ·`;
+    return `★ ${rating} · ${year} · ${genreStr}`;
   };
 
   const headerOpacity = scrollY.interpolate({
@@ -347,6 +321,8 @@ export default function HomeScreen() {
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
+
+  const tabs = ['For You', 'Movies', 'Shows', 'Anime'];
 
   return (
     <View style={styles.container}>
@@ -367,12 +343,7 @@ export default function HomeScreen() {
           { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
-        data={[
-          { key: 'trending', title: 'Trending Right Now', items: trendingMovies, variant: 'default' },
-          { key: 'latest', title: 'New Releases', items: latestMovies, variant: 'default' },
-          { key: 'tv', title: 'Top 10 TV Shows', items: topRatedTv.slice(0, 10), variant: 'top10', onTitlePress: () => router.push('/main/home/top-10/tv') },
-          { key: 'movies', title: 'Top 10 Movies', items: topRatedMovies.slice(0, 10), variant: 'top10', onTitlePress: () => router.push('/main/home/top-10/movie') },
-        ]}
+        data={rows.filter(r => r.items?.length > 0 || r.variant === 'communityWatchlist')} // hide empty rows
         keyExtractor={item => item.key}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
@@ -392,7 +363,13 @@ export default function HomeScreen() {
         )}
         ListFooterComponent={<View style={{ height: 120 }} />}
         ListHeaderComponent={
-          <View style={styles.bannerContainer}>
+          <View style={[styles.bannerContainer, { backgroundColor: dominantColor }]}>
+            {/* Background Gradient Fade */}
+            <ExpoLinearGradient
+              colors={[dominantColor, 'rgba(0,0,0,1)']}
+              style={styles.fill}
+              locations={[0.5, 1]}
+            />
             {bannerItems.length > 0 && (
               <FlatList
                 ref={flatListRef}
@@ -404,84 +381,53 @@ export default function HomeScreen() {
                 scrollEventThrottle={16}
                 keyExtractor={(item) => `banner-${item.id}`}
                 renderItem={({ item, index }) => (
-                  <View style={{ width, height: height * 0.75, overflow: 'hidden' }}>
-                    <Image
-                      source={{ uri: tmdbImage(item.posterPath || item.backdropPath, 'w1280') }}
-                      style={styles.fill}
-                      contentFit="cover"
-                    />
-                    {item.trailerKey && index === activeIndex && (
-                      <View style={{ position: 'absolute', top: -videoOffsetY, left: -videoOffsetX, width: videoWidth, height: videoHeight, opacity: 1 }}>
-                        <BackgroundYoutubePlayer
-                          videoId={item.trailerKey}
-                          isMuted={isMuted}
-                          onProgress={setVideoProgress}
-                          onEnded={() => {
-                            if (bannerItems.length > 0) {
-                              const nextIndex = (activeIndex + 1) % bannerItems.length;
-                              flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-                            }
-                          }}
-                        />
-                        {/* Invisible overlay to block touches but let WebView stay natively interactable for iOS autoplay */}
-                        <View style={StyleSheet.absoluteFill} />
+                  <View style={{ width, height: bannerHeight, alignItems: 'center', justifyContent: 'center', paddingTop: 80 }}>
+                    {/* The new simplified static card */}
+                    <View style={styles.staticCardContainer}>
+                      <Image
+                        source={{ uri: tmdbImage(item.posterPath || item.backdropPath, 'w780') }}
+                        style={styles.staticCardImage}
+                        contentFit="cover"
+                      />
+                      <ExpoLinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,1)']}
+                        locations={[0, 0.5, 1]}
+                        style={styles.fill}
+                      />
+                      <View style={styles.staticCardContent}>
+                        {item.logoPath ? (
+                          <Image
+                            source={{ uri: tmdbImage(item.logoPath, 'w500') }}
+                            style={styles.logoImage}
+                            contentFit="contain"
+                          />
+                        ) : (
+                          <Text style={styles.logoText}>{item.title}</Text>
+                        )}
+                        <View style={styles.statsRow}>
+                          <Text style={styles.metaText}>{getBannerMetaString(item)}</Text>
+                          <View style={styles.fileSizeBadge}>
+                            {sourceStatus === 'loading' ? (
+                              <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
+                            ) : (
+                              <Text style={styles.fileSizeText}>{sourceStatus === 'unavailable' ? 'N/A' : fileSizeRange}</Text>
+                            )}
+                          </View>
+                        </View>
                       </View>
-                    )}
+                    </View>
                   </View>
                 )}
               />
             )}
 
-            <MaskedView
-              style={styles.fill}
-              pointerEvents="none"
-              maskElement={
-                <ExpoLinearGradient
-                  colors={['rgba(0,0,0,1)', 'transparent', 'rgba(0,0,0,1)', 'rgba(0,0,0,1)']}
-                  locations={[0.1, 0.4, 0.6, 1]}
-                  style={styles.fill}
-                />
-              }
-            >
-              <BlurView intensity={100} tint="dark" style={styles.fill} />
-            </MaskedView>
-            <View style={styles.fill} pointerEvents="none">
-              <ExpoLinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.8)', '#000']}
-                locations={[0, 0.4, 0.7, 1]}
-                style={styles.fill}
-              />
-            </View>
-
             <View style={[styles.bannerOverlay, { paddingBottom: 40 }]}>
               {activeBanner && (
                 <View style={styles.bannerContent}>
-                  {activeBanner.logoPath ? (
-                    <Image
-                      source={{ uri: tmdbImage(activeBanner.logoPath, 'w500') }}
-                      style={styles.logoImage}
-                      contentFit="contain"
-                    />
-                  ) : (
-                    <Text style={styles.logoText}>{activeBanner.title}</Text>
-                  )}
-
-                  <View style={styles.statsRow}>
-                    <Text style={styles.metaText}>{getBannerMetaString(activeBanner)}</Text>
-                    <View style={styles.fileSizeBadge}>
-                      {sourceStatus === 'loading' ? (
-                        <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
-                      ) : (
-                        <Text style={styles.fileSizeText}>{sourceStatus === 'unavailable' ? 'N/A' : fileSizeRange}</Text>
-                      )}
-                    </View>
-                  </View>
-
                   <View style={styles.actionRow}>
                     {sourceStatus === 'loading' ? (
                       <TouchableOpacity style={[styles.watchNowButton, { opacity: 0.7 }]} disabled>
                         <ActivityIndicator size="small" color="#000" />
-
                       </TouchableOpacity>
                     ) : sourceStatus === 'unavailable' ? (
                       <TouchableOpacity style={[styles.watchNowButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]} disabled>
@@ -503,6 +449,7 @@ export default function HomeScreen() {
                     <TouchableOpacity activeOpacity={0.8}>
                       <BlurView intensity={20} tint="light" style={styles.iconButton}>
                         <Icon name="add-line" size={24} color="#fff" />
+                        <Text style={{color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 4}}>My List</Text>
                       </BlurView>
                     </TouchableOpacity>
                   </View>
@@ -517,11 +464,7 @@ export default function HomeScreen() {
                             styles.dot,
                             isActive && styles.activeDotWrapper
                           ]}
-                        >
-                          {isActive && (
-                            <View style={[styles.activeDotFill, { width: `${videoProgress * 100}%` }]} />
-                          )}
-                        </View>
+                        />
                       );
                     })}
                   </View>
@@ -532,29 +475,52 @@ export default function HomeScreen() {
         }
       />
 
-      {/* Sticky Header */}
-      <View style={[styles.stickyHeader, { height: insets.top + 70 }]} pointerEvents="box-none">
+      {/* Sticky Header with Tabs */}
+      <View style={[styles.stickyHeader, { height: insets.top + 90 }]} pointerEvents="box-none">
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]} pointerEvents="none">
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
         </Animated.View>
-        <View style={[styles.headerContent, { marginTop: insets.top, paddingVertical: 12 }]} pointerEvents="box-none">
+        
+        {/* Top Header Row */}
+        <View style={[styles.headerContent, { marginTop: insets.top, paddingVertical: 12, paddingBottom: 4 }]} pointerEvents="box-none">
           <Image
             source={require('@/assets/images/streamn-loo.svg')}
             style={{ width: 28, height: 28, tintColor: '#fff' }}
             contentFit="contain"
           />
           <View style={styles.headerIcons}>
-            <TouchableOpacity onPress={() => setIsMuted(!isMuted)} activeOpacity={0.8}>
-              <BlurView intensity={20} tint="light" style={styles.iconButton}>
-                <Icon name={isMuted ? "volume-mute-line" : "volume-up-line"} size={20} color="#fff" />
-              </BlurView>
+            <TouchableOpacity activeOpacity={0.8}>
+              <Icon name="search-2-line" size={24} color="#fff" />
             </TouchableOpacity>
-            {/* <TouchableOpacity activeOpacity={0.8}>
-              <BlurView intensity={20} tint="light" style={styles.iconButton}>
-                <Icon name="notification-3-line" size={20} color="#fff" />
-              </BlurView>
-            </TouchableOpacity> */}
           </View>
+        </View>
+
+        {/* Tabs Row */}
+        <View style={styles.tabsContainer}>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={tabs}
+            keyExtractor={item => item}
+            renderItem={({item}) => (
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => setActiveTab(item as any)}
+                style={[
+                  styles.tabButton,
+                  activeTab === item && styles.tabButtonActive
+                ]}
+              >
+                <Text style={[
+                  styles.tabText,
+                  activeTab === item && styles.tabTextActive
+                ]}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+          />
         </View>
       </View>
     </View>
@@ -571,12 +537,38 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: '#000',
   },
   bannerContainer: {
     width,
-    height: height * 0.75,
+    height: bannerHeight,
     position: 'relative',
+  },
+  staticCardContainer: {
+    width: width * 0.85,
+    height: width * 1.1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+    backgroundColor: '#1e232d'
+  },
+  staticCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  staticCardContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    padding: 16,
   },
   bannerOverlay: {
     position: 'absolute',
@@ -591,20 +583,19 @@ const styles = StyleSheet.create({
   bannerContent: {
     alignItems: 'center',
     width: '100%',
-
   },
   logoImage: {
-    width: width * 0.7,
-    height: 100,
+    width: width * 0.6,
+    height: 80,
     marginBottom: 8,
   },
   logoText: {
     ...typography.headline,
-    fontSize: 42,
+    fontSize: 32,
     color: '#fff',
     textAlign: 'center',
     marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
@@ -614,15 +605,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 24,
   },
   metaText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    fontWeight: '500',
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   fileSizeBadge: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 6,
@@ -639,23 +632,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   watchNowButton: {
     backgroundColor: '#fff',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
     borderRadius: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   watchNowText: {
     color: '#000',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   iconButton: {
-    width: 44,
+    paddingHorizontal: 16,
     height: 44,
     borderRadius: 40,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -672,15 +668,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     overflow: 'hidden',
   },
   activeDotWrapper: {
     width: 24,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  activeDotFill: {
-    height: '100%',
     backgroundColor: '#fff',
   },
   stickyHeader: {
@@ -691,24 +683,34 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   headerContent: {
-    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '800',
   },
   headerIcons: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  contentContainer: {
-    paddingBottom: 120,
+  tabsContainer: {
+    height: 40,
   },
-
+  tabButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+  },
+  tabButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  tabText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: '#fff',
+  },
 });

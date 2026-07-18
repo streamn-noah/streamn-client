@@ -1,4 +1,4 @@
-const WORKER_URL = process.env.EXPO_PUBLIC_MOVIEBOX_API_URL || "https://spun-moviebox-api-chi.vercel.app";
+const WORKER_URL = process.env.EXPO_PUBLIC_MOVIEBOX_API_URL || "https://moviebox-api-umber.vercel.app";
 const WORKER_SECRET = process.env.EXPO_PUBLIC_MOVIEBOX_WORKER_SECRET || "local-secret-12345";
 const SUBJECT_MATCH_TTL_MS = 6 * 60 * 60 * 1000;
 const DOWNLOAD_PACK_TTL_MS = 60 * 1000;

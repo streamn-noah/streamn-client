@@ -232,8 +232,10 @@ export default function CustomPlayer({
     const isHls = cleanedUrl.includes(".m3u8") || activeSource.type === "hls" || activeSource.type === "m3u8";
     const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'; // Default to localhost if missing
 
+    const videoProxyUrl = process.env.EXPO_PUBLIC_VIDEO_PROXY_URL || `${backendUrl}/api/proxy/video`;
+
     // Use proxy for MP4 streams to get the hev1 -> hvc1 conversion on iOS
-    const proxyUrl = isHls ? cleanedUrl : `${backendUrl}/api/proxy/video?url=${encodeURIComponent(cleanedUrl)}`;
+    const proxyUrl = isHls ? cleanedUrl : `${videoProxyUrl}?url=${encodeURIComponent(cleanedUrl)}`;
 
     return {
       uri: proxyUrl,
