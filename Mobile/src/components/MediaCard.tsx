@@ -186,15 +186,7 @@ export default function MediaCard({ item, variant = 'default', rank, index = 0, 
           contentFit="cover"
           transition={300}
         />
-        <View style={styles.defaultMeta}>
-          <Text style={styles.defaultTitle} numberOfLines={1}>{item.title}</Text>
-          <View style={styles.defaultStats}>
-            <Icon name="star-fill" size={10} color="#fff" />
-            <Text style={styles.defaultStatText}>{item.voteAverage ? item.voteAverage.toFixed(1) : "N/A"}</Text>
-            <Text style={styles.defaultStatText}>·</Text>
-            <Text style={styles.defaultStatText}>{item.year || "2026"}</Text>
-          </View>
-        </View>
+
       </View>
 
       {isTop10 && rank !== undefined && (

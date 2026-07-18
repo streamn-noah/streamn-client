@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { StyleSheet, Text, View, Dimensions, TouchableOpacity, FlatList, ActivityIndicator, Animated, RefreshControl } from 'react-native';
 import { Image } from 'expo-image';
 import Icon from 'react-native-remix-icon';
+import { Octicons } from '@expo/vector-icons';
 import { colors, typography } from '@/constants/theme';
 import { 
   getTrending, 
@@ -76,7 +77,7 @@ export default function HomeScreen() {
   const [sourceStatus, setSourceStatus] = useState<"loading" | "available" | "unavailable">("loading");
   const [sources, setSources] = useState<SourceItem[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'For You' | 'Movies' | 'Shows' | 'Anime'>('For You');
+  const [activeTab, setActiveTab] = useState<'Home' | 'Movies' | 'Shows' | 'Anime'>('Home');
 
   useEffect(() => {
     if (!activeBanner) return;
@@ -103,10 +104,6 @@ export default function HomeScreen() {
 
     return () => { isMounted = false; };
   }, [activeBanner]);
-
-  const fileSizeRange = useMemo(() => {
-    return getFileSizeRange(sources);
-  }, [sources]);
 
   const fetchPrimaryData = async () => {
     try {
@@ -183,6 +180,15 @@ export default function HomeScreen() {
         discoverByGenre("movie", 80), // Crime
       ]);
 
+      // Mock Community Watchlist
+      const watchlistMock = [
+        {
+          name: "Must Watch List",
+          profiles: { display_name: "John Doe", avatar_url: "" },
+          items: [kdramas[0], animeSeries[0], blockbusterAction[0]].filter(Boolean)
+        }
+      ];
+
       setRows(prev => {
         let updatedRows = [...prev];
         
@@ -195,7 +201,7 @@ export default function HomeScreen() {
         updatedRows = [
           ...updatedRows,
           { key: 'nollywoodMovies', title: 'Nollywood Movies', items: nollywoodMovies, variant: 'default' },
-          { key: 'communityWatchlist', title: 'Community Watchlist', items: [], variant: 'communityWatchlist' }, // Empty for now, as no mobile endpoint yet
+          { key: 'communityWatchlist', title: 'Community Watchlist', items: watchlistMock, variant: 'communityWatchlist' },
           { key: 'topRatedSeries', title: 'Top Rated Series', items: topRatedSeries.slice(0, 10), variant: 'top10' },
           { key: 'nollywoodShows', title: 'Nollywood Shows', items: nollywoodShows, variant: 'default' },
           { key: 'topRatedMovies', title: 'Top Rated Movies', items: topRatedMovies.slice(0, 10), variant: 'top10' },
@@ -263,16 +269,6 @@ export default function HomeScreen() {
     return () => { mounted = false; };
   }, [activeBanner]);
 
-  // Static banner timer fallback
-  useEffect(() => {
-    if (bannerItems.length === 0) return;
-    const interval = setInterval(() => {
-      const nextIndex = (activeIndex + 1) % bannerItems.length;
-      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-    }, 8000); // 8s per slide since it's static
-    return () => clearInterval(interval);
-  }, [activeIndex, bannerItems.length]);
-
   const handleScroll = (event: any) => {
     const slideSize = event.nativeEvent.layoutMeasurement.width;
     const index = event.nativeEvent.contentOffset.x / slideSize;
@@ -301,8 +297,6 @@ export default function HomeScreen() {
   }
 
   const getBannerMetaString = (item: MediaSummary) => {
-    const rating = item.voteAverage ? item.voteAverage.toFixed(1) : "6.5";
-    const year = item.year || "2026";
     const type = item.mediaType === "movie" ? "Movie" : "Series";
 
     const genreMap: Record<number, string> = {
@@ -312,8 +306,8 @@ export default function HomeScreen() {
       53: "Thriller", 10752: "War", 37: "Western"
     };
 
-    const genreStr = item.genreIds?.map(id => genreMap[id]).filter(Boolean).slice(0, 2).join(' · ') || type;
-    return `★ ${rating} · ${year} · ${genreStr}`;
+    const genreStr = item.genreIds?.map(id => genreMap[id]).filter(Boolean).slice(0, 3).join(' • ') || type;
+    return `${genreStr}`;
   };
 
   const headerOpacity = scrollY.interpolate({
@@ -322,7 +316,7 @@ export default function HomeScreen() {
     extrapolate: 'clamp',
   });
 
-  const tabs = ['For You', 'Movies', 'Shows', 'Anime'];
+  const tabs = ['Home', 'Movies', 'Shows', 'Anime'];
 
   return (
     <View style={styles.container}>
@@ -351,7 +345,7 @@ export default function HomeScreen() {
         maxToRenderPerBatch={1}
         windowSize={3}
         renderItem={({ item, index }) => (
-          <View style={[index === 0 && { marginTop: -20, zIndex: 2 }]}>
+          <View style={[index === 0 && { marginTop: -10, zIndex: 2 }]}>
             <MediaRow
               title={item.title}
               items={item.items}
@@ -390,8 +384,8 @@ export default function HomeScreen() {
                         contentFit="cover"
                       />
                       <ExpoLinearGradient
-                        colors={['transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,1)']}
-                        locations={[0, 0.5, 1]}
+                        colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,1)']}
+                        locations={[0, 0.6, 1]}
                         style={styles.fill}
                       />
                       <View style={styles.staticCardContent}>
@@ -406,13 +400,25 @@ export default function HomeScreen() {
                         )}
                         <View style={styles.statsRow}>
                           <Text style={styles.metaText}>{getBannerMetaString(item)}</Text>
-                          <View style={styles.fileSizeBadge}>
-                            {sourceStatus === 'loading' ? (
-                              <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
-                            ) : (
-                              <Text style={styles.fileSizeText}>{sourceStatus === 'unavailable' ? 'N/A' : fileSizeRange}</Text>
-                            )}
-                          </View>
+                        </View>
+
+                        <View style={styles.actionRow}>
+                          <TouchableOpacity
+                            style={styles.watchNowButton}
+                            activeOpacity={0.8}
+                            onPress={() => router.push((`/player/${item.mediaType}/${item.id}` as any))}
+                          >
+                            <Icon name="play-fill" size={20} color="#000" />
+                            <Text style={styles.watchNowText}>Play</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity 
+                            style={styles.myListButton}
+                            activeOpacity={0.8}
+                          >
+                            <Icon name="add-line" size={20} color="#fff" />
+                            <Text style={styles.myListText}>My List</Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     </View>
@@ -420,77 +426,22 @@ export default function HomeScreen() {
                 )}
               />
             )}
-
-            <View style={[styles.bannerOverlay, { paddingBottom: 40 }]}>
-              {activeBanner && (
-                <View style={styles.bannerContent}>
-                  <View style={styles.actionRow}>
-                    {sourceStatus === 'loading' ? (
-                      <TouchableOpacity style={[styles.watchNowButton, { opacity: 0.7 }]} disabled>
-                        <ActivityIndicator size="small" color="#000" />
-                      </TouchableOpacity>
-                    ) : sourceStatus === 'unavailable' ? (
-                      <TouchableOpacity style={[styles.watchNowButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]} disabled>
-                        <Icon name="error-warning-line" size={20} color="rgba(255,255,255,0.4)" />
-                        <View style={{ marginLeft: 8 }}>
-                          <Text style={[styles.watchNowText, { color: 'rgba(255,255,255,0.4)' }]}>Unavailable</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.watchNowButton}
-                        activeOpacity={0.8}
-                        onPress={() => router.push((`/player/${activeBanner.mediaType}/${activeBanner.id}` as any))}
-                      >
-                        <Text style={styles.watchNowText}>Watch Now</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity activeOpacity={0.8}>
-                      <BlurView intensity={20} tint="light" style={styles.iconButton}>
-                        <Icon name="add-line" size={24} color="#fff" />
-                        <Text style={{color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 4}}>My List</Text>
-                      </BlurView>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.paginationRow}>
-                    {bannerItems.map((_, i) => {
-                      const isActive = i === activeIndex;
-                      return (
-                        <View
-                          key={i}
-                          style={[
-                            styles.dot,
-                            isActive && styles.activeDotWrapper
-                          ]}
-                        />
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-            </View>
           </View>
         }
       />
 
       {/* Sticky Header with Tabs */}
-      <View style={[styles.stickyHeader, { height: insets.top + 90 }]} pointerEvents="box-none">
+      <View style={[styles.stickyHeader, { height: insets.top + 100 }]} pointerEvents="box-none">
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]} pointerEvents="none">
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
         </Animated.View>
         
         {/* Top Header Row */}
-        <View style={[styles.headerContent, { marginTop: insets.top, paddingVertical: 12, paddingBottom: 4 }]} pointerEvents="box-none">
-          <Image
-            source={require('@/assets/images/streamn-loo.svg')}
-            style={{ width: 28, height: 28, tintColor: '#fff' }}
-            contentFit="contain"
-          />
+        <View style={[styles.headerContent, { marginTop: insets.top, paddingVertical: 12, paddingBottom: 16 }]} pointerEvents="box-none">
+          <Text style={styles.headerForYouText}>For You</Text>
           <View style={styles.headerIcons}>
             <TouchableOpacity activeOpacity={0.8}>
-              <Icon name="search-2-line" size={24} color="#fff" />
+              <Octicons name="search" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -519,7 +470,7 @@ export default function HomeScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
           />
         </View>
       </View>
@@ -545,12 +496,12 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   staticCardContainer: {
-    width: width * 0.85,
-    height: width * 1.1,
+    width: width * 0.9,
+    height: width * 1.25,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.05)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
@@ -568,21 +519,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    padding: 16,
-  },
-  bannerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  bannerContent: {
-    alignItems: 'center',
-    width: '100%',
+    padding: 20,
   },
   logoImage: {
     width: width * 0.6,
@@ -605,75 +542,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexWrap: 'wrap',
     gap: 8,
+    marginBottom: 20,
   },
   metaText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
     fontWeight: '600',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  fileSizeBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  fileSizeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    marginBottom: 24,
+    width: '100%',
   },
   watchNowButton: {
     backgroundColor: '#fff',
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 30,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    gap: 6,
   },
   watchNowText: {
     color: '#000',
     fontSize: 15,
     fontWeight: '700',
   },
-  iconButton: {
-    paddingHorizontal: 16,
-    height: 44,
-    borderRadius: 40,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    overflow: 'hidden',
-  },
-  paginationRow: {
+  myListButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flex: 1,
     gap: 6,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    overflow: 'hidden',
-  },
-  activeDotWrapper: {
-    width: 24,
-    backgroundColor: '#fff',
+  myListText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   stickyHeader: {
     position: 'absolute',
@@ -688,6 +604,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
+  headerForYouText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+  },
   headerIcons: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -701,16 +622,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   tabButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#fff',
+    borderColor: '#fff',
   },
   tabText: {
-    color: 'rgba(255,255,255,0.6)',
+    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
   },
   tabTextActive: {
-    color: '#fff',
+    color: '#000',
   },
 });
