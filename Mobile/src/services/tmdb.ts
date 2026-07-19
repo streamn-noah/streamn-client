@@ -532,3 +532,17 @@ export async function getSeasonEpisodes(tvId: number, seasonNumber: number): Pro
     return [];
   }
 }
+
+export async function getPersonCredits(personId: number): Promise<MediaSummary[]> {
+  try {
+    const data = await tmdbFetch<{ cast: TmdbMedia[] }>(`/person/${personId}/combined_credits`);
+    return uniqueByMedia(
+      (data.cast ?? [])
+        .map((item) => normalizeMedia(item))
+        .filter(Boolean) as MediaSummary[]
+    );
+  } catch (error) {
+    console.error("getPersonCredits error", error);
+    return [];
+  }
+}

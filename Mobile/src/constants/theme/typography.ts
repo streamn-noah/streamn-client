@@ -2,12 +2,12 @@ import { colors } from "./colors";
 import type { TextStyle } from "react-native";
 
 export const fontFamilies = {
-  display: "System",
-  body: "System",
-  bodyMedium: "System",
-  bodySemiBold: "System",
-  bodyBold: "System",
-  bodyHeavy: "System",
+  display: "DMSans_700Bold",
+  body: "DMSans_400Regular",
+  bodyMedium: "DMSans_500Medium",
+  bodySemiBold: "DMSans_600SemiBold",
+  bodyBold: "DMSans_700Bold",
+  bodyHeavy: "DMSans_700Bold",
 } as const;
 
 export const typography: Record<

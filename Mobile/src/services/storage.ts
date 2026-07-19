@@ -26,6 +26,11 @@ export async function getLastWatched(): Promise<WatchProgress | null> {
   return cw.length > 0 ? cw[0] : null;
 }
 
+export async function getWatchProgress(mediaType: MediaType, id: number): Promise<WatchProgress | null> {
+  const cw = await getContinueWatching();
+  return cw.find(item => item.mediaType === mediaType && item.id === id) || null;
+}
+
 export async function saveWatchProgress(item: WatchProgress) {
   try {
     const cw = await getContinueWatching();

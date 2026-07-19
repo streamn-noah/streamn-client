@@ -1,17 +1,25 @@
-import { useFonts } from 'expo-font';
+import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold } from '@expo-google-fonts/dm-sans';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { AuthProvider } from '@/components/providers/auth-provider';
+
+import { initDownloadManager } from '@/services/download';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    'Satoshi-Regular': require('../../assets/fonts/Satoshi-Regular.otf'),
-    'Satoshi-Medium': require('../../assets/fonts/Satoshi-Medium.otf'),
-    'Satoshi-Bold': require('../../assets/fonts/Satoshi-Bold.otf'),
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
   });
+
+  useEffect(() => {
+    initDownloadManager();
+  }, []);
 
   useEffect(() => {
     if (loaded || error) {
@@ -19,17 +27,18 @@ export default function RootLayout() {
     }
   }, [loaded, error]);
 
+
   if (!loaded && !error) {
     return null;
   }
 
   return (
-    <>
+    <AuthProvider>
       <Stack>
         <Stack.Screen name="main" options={{ headerShown: false }} />
         <Stack.Screen name="player" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       </Stack>
       <StatusBar style="light" />
-    </>
+    </AuthProvider>
   );
 }

@@ -1,10 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Animated, Alert, Modal, TouchableWithoutFeedback } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import ImageColors from 'react-native-image-colors';
 import { Image } from 'expo-image';
-import { MediaSummary, tmdbImage } from '@/services/media';
-import Svg, { Defs, LinearGradient, Stop, Rect, Text as SvgText } from 'react-native-svg';
+import { MediaSummary, tmdbImage, adjustDominantColor } from '@/services/media';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Rect, Text as SvgText } from 'react-native-svg';
 import Icon from 'react-native-remix-icon';
-import { WatchProgress } from '@/services/storage';
+import { WatchProgress, removeContinueWatching } from '@/services/storage';
 
 interface MediaCardProps {
   item: any; // Can be MediaSummary, WatchProgress, or Watchlist
@@ -13,6 +16,8 @@ interface MediaCardProps {
   index?: number;
   shouldAnimate?: boolean;
   onPress?: () => void;
+  width?: number;
+  height?: number;
 }
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -24,7 +29,7 @@ function formatProgress(seconds: number) {
   return `${mins}m watched`;
 }
 
-export default function MediaCard({ item, variant = 'default', rank, index = 0, shouldAnimate = true, onPress }: MediaCardProps) {
+export default function MediaCard({ item, variant = 'default', rank, index = 0, shouldAnimate = true, onPress, width, height }: MediaCardProps) {
   const isTop10 = variant === 'top10';
   const isContinueWatching = variant === 'continueWatching';
   const isCommunityWatchlist = variant === 'communityWatchlist';
@@ -83,7 +88,7 @@ export default function MediaCard({ item, variant = 'default', rank, index = 0, 
           ) : (
             items.map((watchItem: any, i: number) => {
               const zIndex = 10 - i;
-              const leftOffset = i * 20; // px
+              const leftOffset = i * 20; // tighter spacing
               const poster = watchItem.poster_path || watchItem.backdrop_path;
 
               return (
@@ -119,12 +124,12 @@ export default function MediaCard({ item, variant = 'default', rank, index = 0, 
             ) : (
               <View style={styles.avatarFallback}>
                 <Text style={styles.avatarFallbackText}>
-                  {watchlist.profiles?.display_name?.charAt(0).toUpperCase() || "?"}
+                  {watchlist.profiles?.display_name?.charAt(0).toUpperCase() || "S"}
                 </Text>
               </View>
             )}
             <Text style={styles.watchlistUserText} numberOfLines={1}>
-              {watchlist.profiles?.display_name || "Unknown"}
+              {watchlist.profiles?.display_name || "Streamn User"}
             </Text>
             <Text style={styles.watchlistDot}>·</Text>
             <Text style={styles.watchlistCount}>{itemCount} films</Text>
@@ -134,37 +139,165 @@ export default function MediaCard({ item, variant = 'default', rank, index = 0, 
     );
   }
 
+  const [dominantColor, setDominantColor] = React.useState<string>('rgba(0,0,0,0.8)');
+
+  React.useEffect(() => {
+    if (isContinueWatching && item) {
+      const progressItem = item as WatchProgress;
+      const imageUrl = tmdbImage(progressItem.backdropPath || progressItem.posterPath, 'w500');
+      if (imageUrl) {
+        ImageColors.getColors(imageUrl, {
+          fallback: '#1A1A1A',
+          cache: true,
+          key: imageUrl,
+        }).then((colors) => {
+          if (colors.platform === 'android') {
+            const raw = colors.dominant || colors.vibrant || '#1A1A1A';
+            setDominantColor(adjustDominantColor(raw, '#1A1A1A'));
+          } else if (colors.platform === 'ios') {
+            const raw = colors.background || colors.primary || '#1A1A1A';
+            setDominantColor(adjustDominantColor(raw, '#1A1A1A'));
+          } else {
+            setDominantColor(adjustDominantColor(colors.dominant || '#1A1A1A', '#1A1A1A'));
+          }
+        }).catch(() => { });
+      }
+    }
+  }, [isContinueWatching, item]);
+
   if (isContinueWatching) {
     const progressItem = item as WatchProgress;
     const isTv = progressItem.mediaType === "tv";
-    const titleText = isTv ? `S${progressItem.seasonNumber} E${progressItem.episodeNumber}` : progressItem.title;
-    const subtitleText = isTv ? `${progressItem.title} · ${formatProgress(progressItem.progressSeconds)}` : formatProgress(progressItem.progressSeconds);
+    const titleText = isTv ? `S${progressItem.seasonNumber || 1}, E${progressItem.episodeNumber || 1}` : null;
+    const subtitleText = formatProgress(progressItem.progressSeconds);
+    const progressPercent = Math.min((progressItem.progressSeconds / (progressItem.durationSeconds || 1)) * 100, 100);
+
+    const [isMenuVisible, setMenuVisible] = React.useState(false);
+
+    const handleRemove = () => {
+      Alert.alert("Remove", "Remove this from Continue Watching?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove", style: "destructive", onPress: async () => {
+            await removeContinueWatching(progressItem);
+            Alert.alert("Removed", "Swipe down to refresh the Home screen.");
+          }
+        }
+      ]);
+    };
 
     return (
-      <AnimatedTouchable
-        activeOpacity={0.8}
-        style={[styles.continueContainer, { opacity: fadeAnim, transform: [{ translateY }] }]}
-        onPress={onPress}
-      >
-        <View style={styles.continueImageContainer}>
+      <>
+        <AnimatedTouchable
+          activeOpacity={0.8}
+          style={[styles.continueContainer, { opacity: fadeAnim, transform: [{ translateY }] }]}
+          onPress={onPress}
+        >
           <Image
             source={{ uri: tmdbImage(progressItem.backdropPath || progressItem.posterPath, 'w500') }}
-            style={styles.cardImage}
+            style={StyleSheet.absoluteFill}
             contentFit="cover"
           />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
-          <View style={styles.playIconContainer}>
-            <Icon name="play-fill" size={24} color="#fff" />
+          <LinearGradient
+            colors={[dominantColor, 'transparent', 'transparent', dominantColor]}
+            style={StyleSheet.absoluteFill}
+            locations={[0, 0.3, 0.6, 1]}
+          />
+
+          <View style={styles.continueTopRow}>
+            <Text style={styles.continueTopTitle} numberOfLines={1}>{progressItem.title}</Text>
           </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${(progressItem.progressSeconds / progressItem.durationSeconds) * 100}%` }]} />
+
+          <View style={styles.continueBottomRow}>
+            <View style={styles.continuePlayIcon}>
+              <Icon name="play-fill" size={16} color="#fff" />
+            </View>
+
+            <View style={styles.continueInfo}>
+              <View style={styles.continueProgressTrack}>
+                <View style={[styles.continueProgressFill, { width: `${progressPercent}%` }]} />
+              </View>
+              <View style={styles.continueTextRow}>
+                {titleText && (
+                  <>
+                    <Text style={[styles.continueTitleText, { flexShrink: 1 }]} numberOfLines={1}>{titleText}</Text>
+                    <Text style={styles.continueDot}>·</Text>
+                  </>
+                )}
+                <Text style={[styles.continueSubtitleText, { flexShrink: 1 }]} numberOfLines={1}>{subtitleText}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.continueOptionsBtn} activeOpacity={0.6} onPress={(e) => { e.stopPropagation(); setMenuVisible(true); }}>
+              <Icon name="more-fill" size={20} color="rgba(255,255,255,0.7)" />
+            </TouchableOpacity>
           </View>
-        </View>
-        <View style={styles.continueMeta}>
-          <Text style={styles.continueTitle} numberOfLines={1}>{titleText}</Text>
-          <Text style={styles.continueSubtitle} numberOfLines={1}>{subtitleText}</Text>
-        </View>
-      </AnimatedTouchable>
+        </AnimatedTouchable>
+
+        <Modal visible={isMenuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+          <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.menuContainer}>
+                  <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                    <Icon name="arrow-down-circle-line" size={20} color="#fff" />
+                    <Text style={styles.menuItemText}>Download</Text>
+                  </TouchableOpacity>
+
+                  {isTv && (
+                    <>
+                      <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                        <Icon name="information-line" size={20} color="#fff" />
+                        <Text style={styles.menuItemText}>Go to Episode</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                        <Icon name="information-line" size={20} color="#fff" />
+                        <Text style={styles.menuItemText}>Go to Show</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                        <Icon name="share-box-line" size={20} color="#fff" />
+                        <Text style={styles.menuItemText}>Share Episode</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                        <Icon name="share-box-line" size={20} color="#fff" />
+                        <Text style={styles.menuItemText}>Share Show</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+
+                  {!isTv && (
+                    <>
+                      <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                        <Icon name="information-line" size={20} color="#fff" />
+                        <Text style={styles.menuItemText}>Go to Movie</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                        <Icon name="share-box-line" size={20} color="#fff" />
+                        <Text style={styles.menuItemText}>Share Movie</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+
+                  <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                    <Icon name="subtract-line" size={20} color="#fff" />
+                    <Text style={styles.menuItemText}>Remove from Watchlist</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                    <Icon name="checkbox-multiple-blank-line" size={20} color="#fff" />
+                    <Text style={styles.menuItemText}>Mark as Watched</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); handleRemove(); }}>
+                    <Icon name="delete-bin-line" size={20} color="#fff" />
+                    <Text style={styles.menuItemText}>Remove from Recently Watched</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      </>
     );
   }
 
@@ -175,11 +308,17 @@ export default function MediaCard({ item, variant = 'default', rank, index = 0, 
       style={[
         styles.cardContainer,
         isTop10 && styles.cardContainerTop10,
+        width !== undefined && { width },
+        height !== undefined && { height },
         { opacity: fadeAnim, transform: [{ translateY }] }
       ]}
       onPress={onPress}
     >
-      <View style={styles.cardImageWrapper}>
+      <View style={[
+        styles.cardImageWrapper,
+        width !== undefined && { width },
+        height !== undefined && { height }
+      ]}>
         <Image
           source={{ uri: tmdbImage(item.posterPath || item.backdropPath, 'w500') }}
           style={styles.cardImage}
@@ -223,7 +362,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#1e232d',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   cardImage: {
     width: '100%',
@@ -268,49 +407,86 @@ const styles = StyleSheet.create({
   // Continue Watching
   continueContainer: {
     marginHorizontal: 6,
-    width: 260,
-    flexDirection: 'column',
-    gap: 6,
-  },
-  continueImageContainer: {
-    width: '100%',
+    width: 280,
     aspectRatio: 16 / 9,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#1e232d',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  playIconContainer: {
+  continueTopRow: {
     position: 'absolute',
-    bottom: 12,
-    left: 12,
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
   },
-  progressTrack: {
+  continueTopTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  continueBottomRow: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 10,
+  },
+  continuePlayIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  progressFill: {
+  continueInfo: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  continueProgressTrack: {
+    width: 24,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  continueProgressFill: {
     height: '100%',
-    backgroundColor: '#e50914',
+    backgroundColor: '#fff',
+    borderRadius: 2,
   },
-  continueMeta: {
-    paddingHorizontal: 4,
+  continueTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  continueTitle: {
+  continueTitleText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
-  continueSubtitle: {
+  continueDot: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
+  },
+  continueSubtitleText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
     fontWeight: '500',
-    marginTop: 2,
+  },
+  continueOptionsBtn: {
+    padding: 4,
   },
 
   // Community Watchlist
@@ -334,7 +510,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#1e232d',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -402,5 +578,32 @@ const styles = StyleSheet.create({
   watchlistCount: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuContainer: {
+    width: 260,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(25, 25, 25, 0.98)',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  menuItemText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '500',
+    flexShrink: 1,
   },
 });

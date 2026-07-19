@@ -3,10 +3,14 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo/ui": "~57.0.7",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "12.0.1",
     "@react-native-masked-view/masked-view": "0.3.2",
+    "@react-native-vector-icons/material-icons": "^13.1.2",
     "@supabase/supabase-js": "^2.110.2",
+    "crypto-js": "^4.2.0",
     "expo": "~57.0.7",
     "expo-audio": "~57.0.2",
     "expo-blur": "~57.0.2",
@@ -14,6 +18,7 @@
     "expo-constants": "~57.0.3",
     "expo-dev-client": "~57.0.7",
     "expo-device": "~57.0.1",
+    "expo-file-system": "~57.0.1",
     "expo-font": "~57.0.0",
     "expo-glass-effect": "~57.0.1",
     "expo-haptics": "~57.0.1",
@@ -48,6 +53,7 @@
     "wyzie-lib": "^2.5.2"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.0",

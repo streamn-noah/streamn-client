@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { MediaSummary, MediaType, tmdbImage } from '@/services/media';
 import { fetchStreamSources, SourceItem, SubtitleItem } from '@/services/stream-source';
+import { saveWatchProgress, getWatchProgress } from '@/services/storage';
 import { typography, colors } from '@/constants/theme';
 
 type CustomPlayerProps = {
@@ -141,13 +142,15 @@ export default function CustomPlayer({
 
   const controlsOpacity = useRef(new Animated.Value(1)).current;
   const skipButtonOpacity = useRef(new Animated.Value(0)).current;
-  const hideControlsTimer = useRef<NodeJS.Timeout | null>(null);
+  const hideControlsTimer = useRef<any>(null);
 
   const [vttCues, setVttCues] = useState<VTTCue[]>([]);
   const [selectedSubtitle, setSelectedSubtitle] = useState<number>(0);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const progressRef = useRef({ currentTime: 0, duration: 0 });
+  const hasSeekedRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [bufferPercent, setBufferPercent] = useState(0);
@@ -228,6 +231,12 @@ export default function CustomPlayer({
   const videoSource = useMemo(() => {
     if (!activeSource?.url) return null;
 
+    if (activeSource.type === 'local' || activeSource.url.startsWith('file://')) {
+      return {
+        uri: activeSource.url,
+      };
+    }
+
     const cleanedUrl = activeSource.url.replace(/(https?:\/\/[^/]+)\/\/+/g, "$1/");
     const isHls = cleanedUrl.includes(".m3u8") || activeSource.type === "hls" || activeSource.type === "m3u8";
     const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'; // Default to localhost if missing
@@ -257,12 +266,35 @@ export default function CustomPlayer({
     const timeUpdateSub = player.addListener('timeUpdate', (e) => {
       setCurrentTime(e.currentTime);
       setDuration(player.duration || 0);
+      if (e.currentTime > 0) {
+        progressRef.current = { currentTime: e.currentTime, duration: player.duration || 0 };
+      }
     });
 
-    const statusSub = player.addListener('statusChange', (e) => {
+
+
+    const statusSub = player.addListener('statusChange', async (e) => {
       if (e.status === 'readyToPlay') {
         setIsBuffering(false);
         setDuration(player.duration || 0);
+
+        if (!hasSeekedRef.current) {
+          hasSeekedRef.current = true;
+          try {
+            const progress = await getWatchProgress(mediaType, mediaId);
+            if (progress && progress.progressSeconds > 5) {
+              const isSameEpisode = mediaType === 'movie' ||
+                (progress.seasonNumber === season && progress.episodeNumber === episode);
+              
+              if (isSameEpisode) {
+                console.log("[Player] Resuming playback at:", progress.progressSeconds);
+                Object.assign(player, { currentTime: progress.progressSeconds });
+              }
+            }
+          } catch (err) {
+            console.error("Error seeking to watch progress:", err);
+          }
+        }
       } else if (e.status === 'loading') {
         setIsBuffering(true);
       } else if (e.status === 'error') {
@@ -275,12 +307,58 @@ export default function CustomPlayer({
       if (e.isPlaying) setIsBuffering(false);
     });
 
+    const fallbackInt = setInterval(() => {
+      try {
+        if (player && player.currentTime > 0) {
+          setCurrentTime(player.currentTime);
+          if (player.duration > 0) setDuration(player.duration);
+          progressRef.current = { currentTime: player.currentTime, duration: player.duration || 0 };
+        }
+      } catch (e) {}
+    }, 1000);
+
     return () => {
       timeUpdateSub.remove();
       statusSub.remove();
       playingSub.remove();
+      clearInterval(fallbackInt);
     };
   }, [player, tryNextSource]);
+
+  const handleClose = () => {
+    if (player) {
+      try { player.pause(); } catch (e) {}
+    }
+    onClose();
+  };
+
+  useEffect(() => {
+    const saveProgress = () => {
+      const { currentTime, duration } = progressRef.current;
+      console.log('--- ATTEMPTING TO SAVE PROGRESS ---');
+      console.log('currentTime:', currentTime, 'duration:', duration);
+      if (currentTime > 5) {
+        console.log('SAVING TO STORAGE:', item.title);
+        saveWatchProgress({
+          ...item,
+          mediaType,
+          seasonNumber: season,
+          episodeNumber: episode,
+          progressSeconds: currentTime,
+          durationSeconds: duration || 0,
+          updatedAt: Date.now()
+        });
+      } else {
+        console.log('NOT SAVING: currentTime is <= 5 seconds');
+      }
+    };
+
+    const interval = setInterval(saveProgress, 10000);
+    return () => {
+      clearInterval(interval);
+      saveProgress();
+    };
+  }, [item, mediaType, season, episode]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -468,7 +546,7 @@ export default function CustomPlayer({
         {/* Top Bar */}
         <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 16) }]}>
           <View style={styles.topBarLeft}>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.8}>
+            <TouchableOpacity onPress={handleClose} activeOpacity={0.8}>
               <BlurView intensity={20} tint="light" style={styles.glassBtn}>
                 <Icon name="close-line" size={24} color="#fff" />
               </BlurView>

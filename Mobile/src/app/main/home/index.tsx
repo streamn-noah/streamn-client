@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { StyleSheet, Text, View, Dimensions, TouchableOpacity, FlatList, ActivityIndicator, Animated, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, Dimensions, TouchableOpacity, FlatList, ActivityIndicator, Animated, RefreshControl, TextInput, ScrollView, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import Icon from 'react-native-remix-icon';
-import { Octicons } from '@expo/vector-icons';
 import { colors, typography } from '@/constants/theme';
-import { 
-  getTrending, 
-  getLatest, 
-  getTopRated, 
-  enrichWithLogos, 
+import {
+  getTrending,
+  getLatest,
+  getTopRated,
+  enrichWithLogos,
   getMediaDetail,
   discoverByGenre,
   discoverByOriginCountry,
@@ -16,16 +16,37 @@ import {
 } from '@/services/tmdb';
 import { MediaSummary, tmdbImage, adjustDominantColor } from '@/services/media';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import ImageColors from 'react-native-image-colors';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import MediaRow from '@/components/MediaRow';
+import HomeBanner from '@/components/HomeBanner';
 import { fetchStreamSources, getFileSizeRange, SourceItem } from '@/services/stream-source';
 import { getContinueWatching, WatchProgress } from '@/services/storage';
+import {
+  supabase,
+  getPublicWatchlists,
+  getMyWatchlists,
+  addToWatchlist,
+  removeFromWatchlist,
+  createWatchlist,
+  getWatchlistsForMedia
+} from '@/services/supabase';
+import { Sheet } from '@/components/ui/sheet';
+import { AuthSheet } from '@/components/ui/auth-sheet';
+import { useAuth } from '@/components/providers/auth-provider';
 
 const { width, height } = Dimensions.get('window');
-const bannerHeight = height * 0.75;
+const bannerHeight = height * 0.8;
+const scaleFactor = 1.3;
+const videoWidth = bannerHeight * (16 / 9) * scaleFactor;
+const videoHeight = bannerHeight * scaleFactor;
+const videoOffsetX = (videoWidth - width) / 2;
+const videoOffsetY = (videoHeight - bannerHeight) / 2;
 
 const HomeSkeleton = () => {
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
@@ -58,52 +79,328 @@ const HomeSkeleton = () => {
   );
 };
 
+function TabItem({ item, isActive, onPress, headerOpacity }: { item: string, isActive: boolean, onPress: () => void, headerOpacity: any }) {
+  const opacity = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(opacity, {
+      toValue: isActive ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [isActive]);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={styles.tabButton}
+    >
+      <Animated.View style={[styles.glowContainer, { opacity: Animated.multiply(opacity, headerOpacity) }]}>
+        <View style={styles.glowSquash}>
+          <Svg height="160" width="160">
+            <Defs>
+              <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
+                <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
+                <Stop offset="40%" stopColor="#ffffff" stopOpacity="0.2" />
+                <Stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+              </RadialGradient>
+            </Defs>
+            <Rect width="160" height="160" fill="url(#glow)" />
+          </Svg>
+        </View>
+      </Animated.View>
+
+
+      <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+        {item}
+      </Text>
+
+      <Animated.View style={[styles.tabUnderline, { opacity }]} />
+    </TouchableOpacity>
+  );
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const { user, showGoogleSignIn } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [bannerItems, setBannerItems] = useState<MediaSummary[]>([]);
-  const flatListRef = useRef<FlatList>(null);
-  
-  const [rows, setRows] = useState<any[]>([]);
+  const [allBannerItems, setAllBannerItems] = useState<MediaSummary[]>([]);
 
-  const [activeIndex, setActiveIndex] = useState(0);
-  const activeBanner = bannerItems[activeIndex];
+  const [allRows, setAllRows] = useState<any[]>([]);
 
   const [dominantColor, setDominantColor] = useState<string>('rgba(0,0,0,0.8)');
-  const [sourceStatus, setSourceStatus] = useState<"loading" | "available" | "unavailable">("loading");
-  const [sources, setSources] = useState<SourceItem[]>([]);
 
   const [activeTab, setActiveTab] = useState<'Home' | 'Movies' | 'Shows' | 'Anime'>('Home');
 
+  const bannerItems = useMemo(() => {
+    if (activeTab === 'Movies') {
+      const movies = allBannerItems.filter(i => i.mediaType === 'movie');
+      return movies.length > 0 ? movies : allRows.find(r => r.key === 'newMovies' || r.key === 'topRatedMovies')?.items.slice(0, 5) || [];
+    }
+    if (activeTab === 'Shows') {
+      const shows = allBannerItems.filter(i => i.mediaType === 'tv');
+      return shows.length > 0 ? shows : allRows.find(r => r.key === 'topRatedSeries' || r.key === 'kdramas')?.items.slice(0, 5) || [];
+    }
+    if (activeTab === 'Anime') {
+      return allRows.find(r => r.key === 'animeSeries')?.items.slice(0, 5) || [];
+    }
+    return allBannerItems;
+  }, [allBannerItems, allRows, activeTab]);
+
+  const rows = useMemo(() => {
+    let result: any[] = [];
+    if (activeTab === 'Home') {
+      result = allRows;
+    } else if (activeTab === 'Movies') {
+      const movieKeys = ['newMovies', 'topRatedMovies', 'blockbusterAction', 'laughOutLoud', 'sciFiFantasy', 'spineChillingHorror', 'heartwarmingRomance', 'voyageOfAdventure', 'crimeThrillers', 'nollywoodMovies'];
+      let temp = allRows.filter(r => movieKeys.includes(r.key));
+      const trendingRow = allRows.find(r => r.key === 'trending');
+      if (trendingRow) {
+        const trendingMovies = trendingRow.items.filter((i: any) => i.mediaType === 'movie');
+        if (trendingMovies.length > 0) {
+          temp.unshift({ ...trendingRow, title: 'Trending Movies', items: trendingMovies });
+        }
+      }
+      result = temp;
+    } else if (activeTab === 'Shows') {
+      const showKeys = ['topRatedSeries', 'nollywoodShows', 'kdramas'];
+      let temp = allRows.filter(r => showKeys.includes(r.key));
+      const trendingRow = allRows.find(r => r.key === 'trending');
+      if (trendingRow) {
+        const trendingShows = trendingRow.items.filter((i: any) => i.mediaType === 'tv');
+        if (trendingShows.length > 0) {
+          temp.unshift({ ...trendingRow, title: 'Trending Series', items: trendingShows });
+        }
+      }
+      result = temp;
+    } else if (activeTab === 'Anime') {
+      const animeKeys = ['animeSeries'];
+      result = allRows.filter(r => animeKeys.includes(r.key));
+    } else {
+      result = allRows;
+    }
+
+    const viewMoreKeys = [
+      'trending', 'newMovies', 'nollywoodMovies', 'nollywoodShows',
+      'topRatedSeries', 'topRatedMovies', 'blockbusterAction', 'kdramas',
+      'laughOutLoud', 'sciFiFantasy', 'animeSeries', 'spineChillingHorror',
+      'heartwarmingRomance', 'voyageOfAdventure', 'crimeThrillers'
+    ];
+
+    return result.map(row => {
+      if (viewMoreKeys.includes(row.key)) {
+        return {
+          ...row,
+          onTitlePress: () => {
+            router.push(`/main/home/list?title=${encodeURIComponent(row.title)}&rowKey=${row.key}` as any);
+          }
+        };
+      }
+      return row;
+    });
+  }, [allRows, activeTab, router]);
+
+  // Watchlist & Toast states for Banner
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeBanner = useMemo(() => {
+    return bannerItems[activeIndex < bannerItems.length ? activeIndex : 0];
+  }, [bannerItems, activeIndex]);
+
+  const [watchlists, setWatchlists] = useState<any[]>([]);
+  const [inList, setInList] = useState(false);
+  const [inListWatchlists, setInListWatchlists] = useState<string[]>([]);
+  const [watchlistSheetVisible, setWatchlistSheetVisible] = useState(false);
+  const [newWatchlistName, setNewWatchlistName] = useState("");
+  const [creatingWatchlist, setCreatingWatchlist] = useState(false);
+  const [showNewWatchlistInput, setShowNewWatchlistInput] = useState(false);
+
+  // Animations
+  const listScale = useRef(new Animated.Value(1)).current;
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTranslateY = useRef(new Animated.Value(20)).current;
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [showToastAction, setShowToastAction] = useState(false);
+
+  const [isFocused, setIsFocused] = useState(true);
+  const [scrollYVal, setScrollYVal] = useState(0);
+
+  useEffect(() => {
+    const id = scrollY.addListener(({ value }) => {
+      setScrollYVal(value);
+    });
+    return () => {
+      scrollY.removeListener(id);
+    };
+  }, [scrollY]);
+
+  const isBannerInView = isFocused && scrollYVal < bannerHeight * 0.8;
+
+  // Continue Watching check for Banner
+  const activeBannerProgress = useMemo(() => {
+    if (!activeBanner) return null;
+    const cwRow = allRows.find(r => r.key === 'continueWatching');
+    const cwItems = cwRow?.items || [];
+    return cwItems.find((i: any) => i.id === activeBanner.id && i.mediaType === activeBanner.mediaType) || null;
+  }, [activeBanner, allRows]);
+
+  // Load user watchlists
+  useEffect(() => {
+    async function loadWatchlists() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const lists = await getMyWatchlists();
+        setWatchlists(lists || []);
+      }
+    }
+    loadWatchlists();
+  }, [user]);
+
+  // Check if active banner is in list
   useEffect(() => {
     if (!activeBanner) return;
-    let isMounted = true;
-    setSourceStatus("loading");
-    setSources([]);
+    let active = true;
+    async function checkWatchlist() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+          setInList(false);
+          setInListWatchlists([]);
+          return;
+        }
 
-    fetchStreamSources(activeBanner.mediaType, activeBanner.id, 1, 1, false, "playback")
-      .then((res) => {
-        if (!isMounted) return;
-        if (res.sources && res.sources.length > 0) {
-          setSources(res.sources);
-          setSourceStatus("available");
+        const lists = await getWatchlistsForMedia(activeBanner.id, activeBanner.mediaType);
+        if (!active) return;
+        if (lists && lists.length > 0) {
+          setInList(true);
+          setInListWatchlists(lists);
         } else {
-          setSourceStatus("unavailable");
+          setInList(false);
+          setInListWatchlists([]);
         }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setSourceStatus("unavailable");
-          setSources([]);
-        }
-      });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    checkWatchlist();
+    return () => { active = false; };
+  }, [activeBanner, user]);
 
-    return () => { isMounted = false; };
-  }, [activeBanner]);
+  const triggerBounce = (val: Animated.Value) => {
+    Animated.sequence([
+      Animated.timing(val, { toValue: 1.3, duration: 100, useNativeDriver: true }),
+      Animated.spring(val, { toValue: 1, friction: 4, useNativeDriver: true })
+    ]).start();
+  };
+
+  const showToast = (message: string, showAction: boolean = false) => {
+    setToastMessage(message);
+    setShowToastAction(showAction);
+    setToastVisible(true);
+    Animated.parallel([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(toastTranslateY, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+
+    setTimeout(() => {
+      hideToast();
+    }, 4000);
+  };
+
+  const hideToast = () => {
+    Animated.parallel([
+      Animated.timing(toastOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+      Animated.timing(toastTranslateY, { toValue: 20, duration: 250, useNativeDriver: true }),
+    ]).start(() => {
+      setToastVisible(false);
+    });
+  };
+
+  const handleMyListPress = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      showGoogleSignIn(() => {
+        handleMyListPress();
+      });
+      return;
+    }
+
+    triggerBounce(listScale);
+
+    if (inList) {
+      const listIds = [...inListWatchlists];
+      setInList(false);
+      setInListWatchlists([]);
+      for (const listId of listIds) {
+        await removeFromWatchlist(listId, activeBanner.id, activeBanner.mediaType);
+      }
+    } else {
+      let watchLaterList = watchlists.find(l => l.name.toLowerCase() === "watch later");
+      if (!watchLaterList) {
+        watchLaterList = await createWatchlist("Watch Later", "private");
+        if (watchLaterList) {
+          setWatchlists(prev => [watchLaterList, ...prev]);
+        }
+      }
+
+      if (watchLaterList) {
+        const ok = await addToWatchlist(watchLaterList.id, activeBanner);
+        if (ok) {
+          setInList(true);
+          setInListWatchlists([watchLaterList.id]);
+          showToast("added to watch later list", true);
+        }
+      }
+    }
+  };
+
+  const handleToggleWatchlistPresence = async (watchlistId: string) => {
+    const isAdded = inListWatchlists.includes(watchlistId);
+    if (isAdded) {
+      const ok = await removeFromWatchlist(watchlistId, activeBanner.id, activeBanner.mediaType);
+      if (ok) {
+        setInListWatchlists(prev => prev.filter(id => id !== watchlistId));
+        if (inListWatchlists.length <= 1) {
+          setInList(false);
+        }
+      }
+    } else {
+      const ok = await addToWatchlist(watchlistId, activeBanner);
+      if (ok) {
+        setInListWatchlists(prev => [...prev, watchlistId]);
+        setInList(true);
+      }
+    }
+  };
+
+  const handleCreateNewWatchlist = async () => {
+    if (!newWatchlistName.trim()) return;
+    setCreatingWatchlist(true);
+    try {
+      const newList = await createWatchlist(newWatchlistName.trim(), "private");
+      if (newList) {
+        setWatchlists(prev => [newList, ...prev]);
+        setNewWatchlistName("");
+        setShowNewWatchlistInput(false);
+        const ok = await addToWatchlist(newList.id, activeBanner);
+        if (ok) {
+          setInListWatchlists(prev => [...prev, newList.id]);
+          setInList(true);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCreatingWatchlist(false);
+    }
+  };
+
+
 
   const fetchPrimaryData = async () => {
     try {
@@ -114,10 +411,7 @@ export default function HomeScreen() {
       ]);
 
       const enrichedBanner = await enrichWithLogos(trendingAll.slice(0, 5));
-      // Shuffle active index once initially
-      const initialActiveIndex = Math.floor(Math.random() * Math.min(enrichedBanner.length, 5));
-      setBannerItems(enrichedBanner);
-      setActiveIndex(initialActiveIndex);
+      setAllBannerItems(enrichedBanner);
 
       let initialRows: any[] = [];
       if (cwData.length > 0) {
@@ -126,8 +420,8 @@ export default function HomeScreen() {
 
       initialRows.push({ key: 'trending', title: 'Trending Right Now', items: trendingAll, variant: 'default' });
       initialRows.push({ key: 'newMovies', title: 'New Movies', items: newMovies, variant: 'default' });
-      
-      setRows(initialRows);
+
+      setAllRows(initialRows);
 
       return { cwData, trendingAll, newMovies, enrichedBanner };
     } catch (error) {
@@ -164,6 +458,7 @@ export default function HomeScreen() {
         romanceMovies,
         adventureMovies,
         crimeThrillers,
+        publicWatchlists,
       ] = await Promise.all([
         discoverByOriginCountry("movie", "NG"),
         getTopRated("tv"),
@@ -178,20 +473,12 @@ export default function HomeScreen() {
         discoverByGenre("movie", 10749), // Romance
         discoverByGenre("movie", 12), // Adventure
         discoverByGenre("movie", 80), // Crime
+        getPublicWatchlists(),
       ]);
 
-      // Mock Community Watchlist
-      const watchlistMock = [
-        {
-          name: "Must Watch List",
-          profiles: { display_name: "John Doe", avatar_url: "" },
-          items: [kdramas[0], animeSeries[0], blockbusterAction[0]].filter(Boolean)
-        }
-      ];
-
-      setRows(prev => {
+      setAllRows((prev: any[]) => {
         let updatedRows = [...prev];
-        
+
         // Insert becauseYouWatched right after continue watching
         if (becauseYouWatchedItems.length > 0) {
           const cwIndex = updatedRows.findIndex(r => r.key === 'continueWatching');
@@ -201,7 +488,7 @@ export default function HomeScreen() {
         updatedRows = [
           ...updatedRows,
           { key: 'nollywoodMovies', title: 'Nollywood Movies', items: nollywoodMovies, variant: 'default' },
-          { key: 'communityWatchlist', title: 'Community Watchlist', items: watchlistMock, variant: 'communityWatchlist' },
+          ...(publicWatchlists?.length > 0 ? [{ key: 'communityWatchlist', title: 'Community Watchlist', items: publicWatchlists, variant: 'communityWatchlist' }] : []),
           { key: 'topRatedSeries', title: 'Top Rated Series', items: topRatedSeries.slice(0, 10), variant: 'top10' },
           { key: 'nollywoodShows', title: 'Nollywood Shows', items: nollywoodShows, variant: 'default' },
           { key: 'topRatedMovies', title: 'Top Rated Movies', items: topRatedMovies.slice(0, 10), variant: 'top10' },
@@ -245,43 +532,58 @@ export default function HomeScreen() {
     });
   }, [loadData]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      getContinueWatching().then(cwData => {
+        setAllRows(prev => {
+          let rows = [...prev];
+          const cwIndex = rows.findIndex(r => r.key === 'continueWatching');
+          if (cwData.length > 0) {
+            const cwRow = { key: 'continueWatching', title: 'Continue Watching', items: cwData, variant: 'continueWatching' };
+            if (cwIndex >= 0) rows[cwIndex] = cwRow;
+            else rows.unshift(cwRow);
+          } else if (cwIndex >= 0) {
+            rows.splice(cwIndex, 1);
+          }
+          return rows;
+        });
+      });
+      return () => {
+        setIsFocused(false);
+      };
+    }, [])
+  );
+
   // Dominant color extraction
   useEffect(() => {
     let mounted = true;
-    if (activeBanner) {
-      const url = tmdbImage(activeBanner.backdropPath || activeBanner.posterPath, 'w780');
+    const banner = bannerItems[0];
+    if (banner) {
+      const url = tmdbImage(banner.backdropPath || banner.posterPath, 'w780');
       ImageColors.getColors(url, {
         fallback: '#000000',
         cache: true,
       }).then(c => {
         if (!mounted) return;
         if (c.platform === 'ios') {
-          setDominantColor(adjustDominantColor(c.primary, 'rgba(0,0,0,0.8)'));
+          setDominantColor(adjustDominantColor(c.primary, 'rgba(0,0,0,0.2)'));
         } else if (c.platform === 'android') {
-          setDominantColor(adjustDominantColor(c.dominant || '#000000', 'rgba(0,0,0,0.8)'));
+          setDominantColor(adjustDominantColor(c.dominant || '#ffffffff', 'rgba(0,0,0,0.2)'));
         } else {
-          setDominantColor(adjustDominantColor(c.dominant || '#000000', 'rgba(0,0,0,0.8)'));
+          setDominantColor(adjustDominantColor(c.dominant || '#ffffffff', 'rgba(0,0,0,0.2)'));
         }
       }).catch(() => {
         if (mounted) setDominantColor('rgba(0,0,0,0.8)');
       });
     }
     return () => { mounted = false; };
-  }, [activeBanner]);
-
-  const handleScroll = (event: any) => {
-    const slideSize = event.nativeEvent.layoutMeasurement.width;
-    const index = event.nativeEvent.contentOffset.x / slideSize;
-    const roundIndex = Math.round(index);
-    if (roundIndex !== activeIndex && roundIndex >= 0 && roundIndex < bannerItems.length) {
-      setActiveIndex(roundIndex);
-    }
-  };
+  }, [bannerItems]);
 
   const [viewableRows, setViewableRows] = useState<Set<string>>(new Set());
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    setViewableRows((prev) => {
+    setViewableRows((prev: Set<string>) => {
       const newSet = new Set(prev);
       viewableItems.forEach((v: any) => {
         if (v.isViewable && v.key) newSet.add(v.key);
@@ -292,23 +594,9 @@ export default function HomeScreen() {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 10 }).current;
 
-  if (loading && rows.length === 0) {
+  if (loading && allRows.length === 0) {
     return <HomeSkeleton />;
   }
-
-  const getBannerMetaString = (item: MediaSummary) => {
-    const type = item.mediaType === "movie" ? "Movie" : "Series";
-
-    const genreMap: Record<number, string> = {
-      28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
-      99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
-      27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance", 878: "Sci-Fi",
-      53: "Thriller", 10752: "War", 37: "Western"
-    };
-
-    const genreStr = item.genreIds?.map(id => genreMap[id]).filter(Boolean).slice(0, 3).join(' • ') || type;
-    return `${genreStr}`;
-  };
 
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 150],
@@ -337,7 +625,7 @@ export default function HomeScreen() {
           { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
-        data={rows.filter(r => r.items?.length > 0 || r.variant === 'communityWatchlist')} // hide empty rows
+        data={rows.filter((r: any) => r.items?.length > 0 || r.variant === 'communityWatchlist')} // hide empty rows
         keyExtractor={item => item.key}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
@@ -357,91 +645,133 @@ export default function HomeScreen() {
         )}
         ListFooterComponent={<View style={{ height: 120 }} />}
         ListHeaderComponent={
-          <View style={[styles.bannerContainer, { backgroundColor: dominantColor }]}>
-            {/* Background Gradient Fade */}
-            <ExpoLinearGradient
-              colors={[dominantColor, 'rgba(0,0,0,1)']}
-              style={styles.fill}
-              locations={[0.5, 1]}
-            />
-            {bannerItems.length > 0 && (
-              <FlatList
-                ref={flatListRef}
-                data={bannerItems}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScroll={handleScroll}
-                scrollEventThrottle={16}
-                keyExtractor={(item) => `banner-${item.id}`}
-                renderItem={({ item, index }) => (
-                  <View style={{ width, height: bannerHeight, alignItems: 'center', justifyContent: 'center', paddingTop: 80 }}>
-                    {/* The new simplified static card */}
-                    <View style={styles.staticCardContainer}>
-                      <Image
-                        source={{ uri: tmdbImage(item.posterPath || item.backdropPath, 'w780') }}
-                        style={styles.staticCardImage}
-                        contentFit="cover"
-                      />
-                      <ExpoLinearGradient
-                        colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,1)']}
-                        locations={[0, 0.6, 1]}
-                        style={styles.fill}
-                      />
-                      <View style={styles.staticCardContent}>
-                        {item.logoPath ? (
-                          <Image
-                            source={{ uri: tmdbImage(item.logoPath, 'w500') }}
-                            style={styles.logoImage}
-                            contentFit="contain"
-                          />
-                        ) : (
-                          <Text style={styles.logoText}>{item.title}</Text>
-                        )}
-                        <View style={styles.statsRow}>
-                          <Text style={styles.metaText}>{getBannerMetaString(item)}</Text>
-                        </View>
-
-                        <View style={styles.actionRow}>
-                          <TouchableOpacity
-                            style={styles.watchNowButton}
-                            activeOpacity={0.8}
-                            onPress={() => router.push((`/player/${item.mediaType}/${item.id}` as any))}
-                          >
-                            <Icon name="play-fill" size={20} color="#000" />
-                            <Text style={styles.watchNowText}>Play</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity 
-                            style={styles.myListButton}
-                            activeOpacity={0.8}
-                          >
-                            <Icon name="add-line" size={20} color="#fff" />
-                            <Text style={styles.myListText}>My List</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                )}
-              />
-            )}
-          </View>
+          <HomeBanner
+            items={bannerItems}
+            activeTab={activeTab}
+            activeIndex={activeIndex}
+            setActiveIndex={setActiveIndex}
+            inList={inList}
+            onMyListPress={handleMyListPress}
+            listScale={listScale}
+            activeBannerProgress={activeBannerProgress}
+            isActive={isBannerInView}
+          />
         }
       />
 
-      {/* Sticky Header with Tabs */}
-      <View style={[styles.stickyHeader, { height: insets.top + 100 }]} pointerEvents="box-none">
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerOpacity }]} pointerEvents="none">
-          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+      {/* WATCHLIST PICKER BOTTOM SHEET */}
+      <Sheet visible={watchlistSheetVisible} onClose={() => setWatchlistSheetVisible(false)}>
+        <Text style={styles.sheetTitle}>Add to Watchlist</Text>
+
+        <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+          {watchlists.map((list) => {
+            const isAdded = inListWatchlists.includes(list.id);
+            return (
+              <TouchableOpacity
+                key={list.id}
+                style={styles.sheetListItem}
+                onPress={() => handleToggleWatchlistPresence(list.id)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.sheetCheckbox, isAdded && styles.sheetCheckboxChecked]}>
+                  {isAdded && <Icon name="check-line" size={16} color="#000" />}
+                </View>
+                <Text style={styles.sheetListItemText}>{list.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          {showNewWatchlistInput ? (
+            <View style={styles.newWatchlistContainer}>
+              <TextInput
+                style={styles.newWatchlistInput}
+                placeholder="List Name..."
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={newWatchlistName}
+                onChangeText={setNewWatchlistName}
+                autoFocus
+              />
+              <View style={styles.newWatchlistActions}>
+                <TouchableOpacity
+                  style={[styles.newWatchlistBtn, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                  onPress={() => setShowNewWatchlistInput(false)}
+                >
+                  <Text style={styles.newWatchlistBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.newWatchlistBtn, { backgroundColor: '#fff' }]}
+                  onPress={handleCreateNewWatchlist}
+                  disabled={creatingWatchlist}
+                >
+                  {creatingWatchlist ? (
+                    <ActivityIndicator size="small" color="#000" />
+                  ) : (
+                    <Text style={[styles.newWatchlistBtnText, { color: '#000' }]}>Create</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.sheetCreateBtn}
+              onPress={() => setShowNewWatchlistInput(true)}
+              activeOpacity={0.7}
+            >
+              <Icon name="add-line" size={20} color="rgba(255,255,255,0.6)" />
+              <Text style={styles.sheetCreateBtnText}>Create New Watchlist</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+
+        <TouchableOpacity
+          style={styles.sheetDoneBtn}
+          onPress={() => setWatchlistSheetVisible(false)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sheetDoneBtnText}>Done</Text>
+        </TouchableOpacity>
+      </Sheet>
+
+      {/* WATCH LATER TOAST NOTIFICATION */}
+      {toastVisible && (
+        <Animated.View style={[
+          styles.toastContainer,
+          {
+            opacity: toastOpacity,
+            transform: [{ translateY: toastTranslateY }],
+            bottom: Platform.OS === 'ios' ? insets.bottom + 12 : 20
+          }
+        ]}>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+          {showToastAction && (
+            <TouchableOpacity onPress={() => { hideToast(); setWatchlistSheetVisible(true); }} activeOpacity={0.7}>
+              <Text style={styles.toastActionText}>change</Text>
+            </TouchableOpacity>
+          )}
         </Animated.View>
-        
+      )}
+
+      {/* GLOBAL AUTH SHEET */}
+      <AuthSheet />
+
+      {/* Sticky Header with Tabs */}
+      <View style={styles.stickyHeader} pointerEvents="box-none">
+        <Animated.View style={[
+          StyleSheet.absoluteFill,
+          {
+            opacity: headerOpacity,
+            backgroundColor: 'rgba(0,0,0,1)',
+            // borderBottomWidth: StyleSheet.hairlineWidth,
+            // borderBottomColor: 'rrgba(38, 38, 38, 0.33)'
+          }
+        ]} pointerEvents="none" />
+
         {/* Top Header Row */}
         <View style={[styles.headerContent, { marginTop: insets.top, paddingVertical: 12, paddingBottom: 16 }]} pointerEvents="box-none">
           <Text style={styles.headerForYouText}>For You</Text>
           <View style={styles.headerIcons}>
             <TouchableOpacity activeOpacity={0.8}>
-              <Octicons name="search" size={22} color="#fff" />
+              <Icon name="search-line" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -453,22 +783,13 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             data={tabs}
             keyExtractor={item => item}
-            renderItem={({item}) => (
-              <TouchableOpacity 
-                activeOpacity={0.8}
+            renderItem={({ item }) => (
+              <TabItem
+                item={item as string}
+                isActive={activeTab === item}
                 onPress={() => setActiveTab(item as any)}
-                style={[
-                  styles.tabButton,
-                  activeTab === item && styles.tabButtonActive
-                ]}
-              >
-                <Text style={[
-                  styles.tabText,
-                  activeTab === item && styles.tabTextActive
-                ]}>
-                  {item}
-                </Text>
-              </TouchableOpacity>
+                headerOpacity={headerOpacity}
+              />
             )}
             contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
           />
@@ -490,107 +811,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  bannerContainer: {
-    width,
-    height: bannerHeight,
-    position: 'relative',
-  },
-  staticCardContainer: {
-    width: width * 0.9,
-    height: width * 1.25,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
-    backgroundColor: '#1e232d'
-  },
-  staticCardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  staticCardContent: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    padding: 20,
-  },
-  logoImage: {
-    width: width * 0.6,
-    height: 80,
-    marginBottom: 8,
-  },
-  logoText: {
-    ...typography.headline,
-    fontSize: 32,
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  metaText: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 13,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    width: '100%',
-  },
-  watchNowButton: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    gap: 6,
-  },
-  watchNowText: {
-    color: '#000',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  myListButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    gap: 6,
-  },
-  myListText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
+
   stickyHeader: {
     position: 'absolute',
     top: 0,
@@ -603,6 +824,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
+
   },
   headerForYouText: {
     color: '#fff',
@@ -619,22 +841,168 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    paddingVertical: 8,
+    justifyContent: 'center',
+    height: 36,
+    position: 'relative',
   },
-  tabButtonActive: {
-    backgroundColor: '#fff',
-    borderColor: '#fff',
-  },
+  tabButtonActive: {},
   tabText: {
-    color: '#fff',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     fontWeight: '600',
   },
   tabTextActive: {
+    color: 'white',
+  },
+  glowContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: '50%',
+    marginLeft: -80,
+    width: 160,
+    height: 36,
+    overflow: 'hidden',
+    zIndex: -1,
+  },
+  glowSquash: {
+    position: 'absolute',
+    left: 0,
+    bottom: -80,
+    width: 160,
+    height: 160,
+    transform: [{ scaleY: 0.5 }],
+  },
+  tabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 12,
+    right: 12,
+    height: 2,
+    backgroundColor: 'white',
+    borderRadius: 1,
+  },
+
+  // Sheet additions
+  sheetTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  sheetListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  sheetCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    marginRight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sheetCheckboxChecked: {
+    borderColor: '#fff',
+    backgroundColor: '#fff',
+  },
+  sheetListItemText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  sheetCreateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginTop: 8,
+  },
+  sheetCreateBtnText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  newWatchlistContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  newWatchlistInput: {
+    color: '#fff',
+    fontSize: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  newWatchlistActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  newWatchlistBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  newWatchlistBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sheetDoneBtn: {
+    backgroundColor: '#fff',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  sheetDoneBtnText: {
     color: '#000',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Toast
+  toastContainer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+    zIndex: 999,
+  },
+  toastText: {
+    color: '#121214',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  toastActionText: {
+    color: '#2563EB',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
 });

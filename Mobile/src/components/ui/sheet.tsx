@@ -49,8 +49,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: colors.white,
-    borderRadius: radius.md,
+    backgroundColor: '#121214',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     maxHeight: '82%',
     marginHorizontal: 14,
     marginBottom: spacing.lg,
