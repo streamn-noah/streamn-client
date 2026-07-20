@@ -31,6 +31,11 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.VIBRATE",
         "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.VIBRATE",
+        "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "package": "com.knoah23.streamn"
@@ -66,6 +71,12 @@
       "eas": {
         "projectId": "67be49b9-9b6e-4c35-9763-92871885d9ba"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/67be49b9-9b6e-4c35-9763-92871885d9ba"
     }
   }
 }
