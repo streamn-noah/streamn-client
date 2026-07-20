@@ -30,6 +30,7 @@ import * as Clipboard from 'expo-clipboard';
 import { WebView } from 'react-native-webview';
 import { AuthSheet } from '@/components/ui/auth-sheet';
 import MediaRow from '@/components/MediaRow';
+import { WatchPartyInviteModal } from '@/components/streamn/watch-party-invite-modal';
 import {
   startDownload,
   cancelDownload,
@@ -431,6 +432,7 @@ export default function MediaDetailModal() {
 
   // YouTube Trailer Overlay state
   const [trailerVisible, setTrailerVisible] = useState(false);
+  const [isWatchPartyModalOpen, setIsWatchPartyModalOpen] = useState(false);
 
   // Bounce scale animations
   const listScale = useRef(new Animated.Value(1)).current;
@@ -952,7 +954,11 @@ export default function MediaDetailModal() {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.watchTogetherButton} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.watchTogetherButton}
+              activeOpacity={0.8}
+              onPress={() => setIsWatchPartyModalOpen(true)}
+            >
               <Icon name="tv-2-line" size={20} color="#fff" />
               <Text style={styles.watchTogetherText}>Watch Together</Text>
             </TouchableOpacity>
@@ -1409,6 +1415,17 @@ export default function MediaDetailModal() {
 
       {/* GLOBAL AUTH SHEET */}
       <AuthSheet />
+
+      {/* WATCH PARTY INVITE MODAL */}
+      <WatchPartyInviteModal
+        isOpen={isWatchPartyModalOpen}
+        onClose={() => setIsWatchPartyModalOpen(false)}
+        mediaType={detail.mediaType || type}
+        mediaId={detail.id || Number(id)}
+        season={selectedSeason}
+        episode={1}
+        title={detail.title}
+      />
 
     </View>
   );

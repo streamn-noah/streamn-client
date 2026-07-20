@@ -243,3 +243,242 @@ export async function getPublicWatchlists() {
     return [];
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADDITIONAL WATCHLISTS & USER HELPERS FOR MOBILE PORT
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getWatchHistory(): Promise<any[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("watch_history")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching watch history:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+export async function removeFromWatchHistory(mediaId: number, mediaType: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { error } = await supabase
+    .from("watch_history")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("media_id", mediaId)
+    .eq("media_type", mediaType);
+
+  return !error;
+}
+
+export async function getLikedMedia(): Promise<any[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("liked_media")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("liked_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching liked media:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+export async function getWatchlist(watchlistId: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from("watchlists")
+    .select("*, watchlist_items(*)")
+    .eq("id", watchlistId)
+    .single();
+
+  if (error) {
+    console.error("Error fetching watchlist:", error);
+    return null;
+  }
+
+  if (data && data.user_id) {
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("display_name, avatar_url")
+      .eq("id", data.user_id)
+      .single();
+      
+    return { ...data, profiles: profile };
+  }
+
+  return data;
+}
+
+export async function getWatchlistItems(watchlistId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from("watchlist_items")
+    .select("*")
+    .eq("watchlist_id", watchlistId)
+    .order("added_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching watchlist items:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+export async function updateWatchlist(
+  watchlistId: string,
+  updates: { name?: string; description?: string; privacy?: "public" | "private" }
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("watchlists")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", watchlistId);
+
+  return !error;
+}
+
+export async function deleteWatchlist(watchlistId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from("watchlists")
+    .delete()
+    .eq("id", watchlistId);
+
+  return !error;
+}
+
+export async function getUserProfile(): Promise<any | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  if (error) {
+    console.error("Error fetching user profile:", error);
+    return null;
+  }
+  return data;
+}
+
+export async function getAllProfiles(): Promise<any[]> {
+  const { data, error } = await adminClient
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching all profiles:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+export async function updateUserProfile(updates: { display_name?: string; avatar_url?: string }): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", user.id);
+
+  if (error) {
+    console.error("Error updating user profile:", error);
+    return false;
+  }
+  return true;
+}
+
+export async function createWatchlistInvite(watchlistId: string): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("watchlist_invites")
+    .insert({ watchlist_id: watchlistId, created_by: user.id })
+    .select()
+    .single();
+
+  if (error || !data) {
+    console.error("Error creating watchlist invite:", error);
+    return null;
+  }
+  return data.id;
+}
+
+export async function getWatchlistInvite(inviteId: string): Promise<any | null> {
+  const { data, error } = await adminClient
+    .from("watchlist_invites")
+    .select("*, watchlists(*, watchlist_items(*))")
+    .eq("id", inviteId)
+    .gt("expires_at", new Date().toISOString())
+    .single();
+
+  if (error || !data) {
+    console.error("Error fetching watchlist invite:", error);
+    return null;
+  }
+  return data;
+}
+
+export async function acceptWatchlistInvite(inviteId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const invite = await getWatchlistInvite(inviteId);
+  if (!invite || !invite.watchlists) return false;
+
+  const original = invite.watchlists;
+
+  // Create a local copy
+  const { data: newList, error: listError } = await supabase
+    .from("watchlists")
+    .insert({
+      user_id: user.id,
+      name: `${original.name} (shared)`,
+      description: original.description,
+      privacy: "private",
+    })
+    .select()
+    .single();
+
+  if (listError || !newList) {
+    console.error("Error creating shared watchlist copy:", listError);
+    return false;
+  }
+
+  const items = original.watchlist_items ?? [];
+  if (items.length > 0) {
+    const { error: itemsError } = await supabase.from("watchlist_items").insert(
+      items.map((item: any) => ({
+        watchlist_id: newList.id,
+        media_id: item.media_id,
+        media_type: item.media_type,
+        title: item.title,
+        poster_path: item.poster_path,
+        backdrop_path: item.backdrop_path,
+        year: item.year,
+        vote_average: item.vote_average,
+      }))
+    );
+    if (itemsError) {
+      console.error("Error copying items for shared watchlist:", itemsError);
+    }
+  }
+
+  return true;
+}
+

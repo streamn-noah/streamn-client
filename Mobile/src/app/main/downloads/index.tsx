@@ -26,6 +26,7 @@ import {
   DownloadItem,
   ActiveDownload,
 } from '@/services/download';
+import { tmdbImage } from '@/services/media';
 
 const { width } = Dimensions.get('window');
 
@@ -291,7 +292,7 @@ export default function DownloadsScreen() {
             <View style={styles.listSection}>
               {groupedDownloads.map((group) => {
                 const isExpanded = expandedShowIds.includes(group.id);
-                const displayImage = group.localPosterUri || group.posterPath;
+                const displayImage = group.localPosterUri || (group.posterPath ? tmdbImage(group.posterPath, 'w300') : null);
 
                 return (
                   <View key={`${group.type}:${group.id}`} style={styles.groupedItemContainer}>
@@ -378,66 +379,69 @@ export default function DownloadsScreen() {
                     {/* TV Episode accordion list */}
                     {group.type === 'tv' && isExpanded && (
                       <View style={styles.accordionContainer}>
-                        {group.episodes.map((ep) => (
-                          <TouchableOpacity
-                            key={`${ep.seasonNumber}:${ep.episodeNumber}`}
-                            style={styles.episodeRow}
-                            activeOpacity={0.7}
-                            onPress={() => {
-                              if (isEditing) {
-                                handleDeleteEpisode(
-                                  group.id,
-                                  ep.seasonNumber || 1,
-                                  ep.episodeNumber || 1,
-                                  ep.episodeName || 'Episode'
-                                );
-                              } else {
-                                handlePlayEpisode(
-                                  group.id,
-                                  ep.seasonNumber || 1,
-                                  ep.episodeNumber || 1
-                                );
-                              }
-                            }}
-                          >
-                            <View style={styles.episodeThumbnailWrapper}>
-                              {ep.localPosterUri || ep.posterPath ? (
-                                <Image
-                                  source={{ uri: (ep.localPosterUri || ep.posterPath) as string }}
-                                  style={styles.episodeThumbnail}
-                                  contentFit="cover"
-                                />
-                              ) : (
-                                <View style={styles.episodeThumbnailFallback}>
-                                  <Icon name="film-line" size={16} color="rgba(255,255,255,0.2)" />
-                                </View>
-                              )}
-                              {!isEditing && (
-                                <View style={styles.thumbnailPlayOverlay}>
-                                  <Icon name="play-fill" size={12} color="#fff" />
-                                </View>
-                              )}
-                            </View>
+                        {group.episodes.map((ep) => {
+                          const epImage = ep.localPosterUri || (ep.posterPath ? tmdbImage(ep.posterPath, 'w200') : null);
+                          return (
+                            <TouchableOpacity
+                              key={`${ep.seasonNumber}:${ep.episodeNumber}`}
+                              style={styles.episodeRow}
+                              activeOpacity={0.7}
+                              onPress={() => {
+                                if (isEditing) {
+                                  handleDeleteEpisode(
+                                    group.id,
+                                    ep.seasonNumber || 1,
+                                    ep.episodeNumber || 1,
+                                    ep.episodeName || 'Episode'
+                                  );
+                                } else {
+                                  handlePlayEpisode(
+                                    group.id,
+                                    ep.seasonNumber || 1,
+                                    ep.episodeNumber || 1
+                                  );
+                                }
+                              }}
+                            >
+                              <View style={styles.episodeThumbnailWrapper}>
+                                {epImage ? (
+                                  <Image
+                                    source={{ uri: epImage }}
+                                    style={styles.episodeThumbnail}
+                                    contentFit="cover"
+                                  />
+                                ) : (
+                                  <View style={styles.episodeThumbnailFallback}>
+                                    <Icon name="film-line" size={16} color="rgba(255,255,255,0.2)" />
+                                  </View>
+                                )}
+                                {!isEditing && (
+                                  <View style={styles.thumbnailPlayOverlay}>
+                                    <Icon name="play-fill" size={12} color="#fff" />
+                                  </View>
+                                )}
+                              </View>
 
-                            <View style={styles.episodeDetails}>
-                              <Text style={styles.episodeTitle} numberOfLines={1}>
-                                S{ep.seasonNumber}:E{ep.episodeNumber} · {ep.episodeName}
-                              </Text>
-                              <Text style={styles.episodeMeta}>
-                                {ep.sizeStr} ·{' '}
-                                {ep.runtime ? runtimeLabel(ep.runtime) : 'Unknown duration'}
-                              </Text>
-                            </View>
+                              <View style={styles.episodeDetails}>
+                                <Text style={styles.episodeTitle} numberOfLines={1}>
+                                  S{ep.seasonNumber}:E{ep.episodeNumber} · {ep.episodeName}
+                                </Text>
+                                <Text style={styles.episodeMeta}>
+                                  {ep.sizeStr} ·{' '}
+                                  {ep.runtime ? runtimeLabel(ep.runtime) : 'Unknown duration'}
+                                </Text>
+                              </View>
 
-                            <View style={styles.episodeRightAction}>
-                              {isEditing ? (
-                                <Icon name="delete-bin-line" size={18} color={colors.danger} />
-                              ) : (
-                                <Icon name="play-fill" size={16} color="#fff" />
-                              )}
-                            </View>
-                          </TouchableOpacity>
-                        ))}
+                              <View style={styles.episodeRightAction}>
+                                {isEditing ? (
+                                  <Icon name="delete-bin-line" size={18} color={colors.danger} />
+                                ) : (
+                                  <Icon name="play-fill" size={16} color="#fff" />
+                                )}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     )}
                   </View>

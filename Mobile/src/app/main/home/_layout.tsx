@@ -7,6 +7,7 @@ export default function HomeLayout() {
       <Stack.Screen name="detail/[type]/[id]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="top-10/[type]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="list" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="watchlist/[id]" options={{ presentation: 'card' }} />
     </Stack>
   );
 }

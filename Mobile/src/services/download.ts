@@ -1,8 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { MediaType } from './media';
+import { fetchStreamSources } from './stream-source';
 
 const DOWNLOADS_KEY = 'streamn_downloads_list';
+
+export interface IntroDbSegmentData {
+  startMs: number;
+  endMs: number | null;
+  durationMs: number | null;
+  startsAtBeginning: boolean;
+  endsAtMediaEnd: boolean;
+}
+
+export interface OfflineIntroDbSegments {
+  intro: IntroDbSegmentData[];
+  recap: IntroDbSegmentData[];
+  credits: IntroDbSegmentData[];
+  preview: IntroDbSegmentData[];
+}
 
 export interface DownloadItem {
   id: number;
@@ -22,6 +38,9 @@ export interface DownloadItem {
   // Local files
   localVideoUri: string;
   localPosterUri: string | null;
+  localSubtitleUri?: string | null;
+  subtitleLanguage?: string | null;
+  introDbSegments?: OfflineIntroDbSegments | null;
   // Download metadata
   quality: string;
   sizeStr: string;
@@ -146,6 +165,8 @@ export async function startDownload({
   streamUrl,
   quality,
   sizeStr,
+  subtitleUrl,
+  subtitleLanguage,
 }: {
   id: number;
   mediaType: MediaType;
@@ -163,6 +184,8 @@ export async function startDownload({
   streamUrl: string;
   quality: string;
   sizeStr: string;
+  subtitleUrl?: string;
+  subtitleLanguage?: string;
 }) {
   const key = getDownloadKey(mediaType, id, seasonNumber, episodeNumber);
 
@@ -188,13 +211,87 @@ export async function startDownload({
     try {
       const posterFileName = `${mediaType}_${id}_poster.jpg`;
       const posterTargetUri = dirPath + posterFileName;
-      const posterDownload = await FileSystem.downloadAsync(posterPath, posterTargetUri);
+      const absolutePosterUrl = posterPath.startsWith('http')
+        ? posterPath
+        : `https://image.tmdb.org/t/p/w500${posterPath}`;
+
+      const posterDownload = await FileSystem.downloadAsync(absolutePosterUrl, posterTargetUri);
       if (posterDownload.status === 200) {
         localPosterUri = posterDownload.uri;
       }
     } catch (e) {
       console.warn('Failed to download poster image locally, fallback to remote:', e);
     }
+  }
+
+  // Pre-download Subtitle locally (VTT)
+  let localSubtitleUri: string | null = null;
+  let finalSubtitleLanguage = subtitleLanguage || 'English';
+  let targetSubUrl = subtitleUrl;
+
+  if (!targetSubUrl) {
+    try {
+      const streamRes = await fetchStreamSources(mediaType, id, seasonNumber || 1, episodeNumber || 1);
+      if (streamRes.subtitles && streamRes.subtitles.length > 0) {
+        targetSubUrl = streamRes.subtitles[0].url;
+        finalSubtitleLanguage = streamRes.subtitles[0].language || streamRes.subtitles[0].label || 'English';
+      }
+    } catch (e) {
+      console.warn('Failed to fetch subtitle track for download:', e);
+    }
+  }
+
+  if (targetSubUrl) {
+    try {
+      const subFileName = `${mediaType}_${id}_${seasonNumber || 0}_${episodeNumber || 0}_sub.vtt`;
+      const subTargetUri = dirPath + subFileName;
+      let cleanSubUrl = targetSubUrl.startsWith('http://')
+        ? targetSubUrl.replace(/^http:\/\//i, 'https://')
+        : targetSubUrl;
+
+      const subDownload = await FileSystem.downloadAsync(cleanSubUrl, subTargetUri);
+      if (subDownload.status === 200) {
+        localSubtitleUri = subDownload.uri;
+      }
+    } catch (e) {
+      console.warn('Failed to download subtitle file locally:', e);
+    }
+  }
+
+  // Pre-fetch IntroDB segment timestamps for offline skip intro/outro
+  let introDbSegmentsData: OfflineIntroDbSegments | null = null;
+  try {
+    const introDbUrl = new URL('https://api.theintrodb.org/v3/media');
+    introDbUrl.searchParams.set('tmdb_id', String(id));
+    if (mediaType === 'tv' && seasonNumber && episodeNumber) {
+      introDbUrl.searchParams.set('season', String(seasonNumber));
+      introDbUrl.searchParams.set('episode', String(episodeNumber));
+    }
+    const introRes = await fetch(introDbUrl.toString(), { headers: { Accept: 'application/json' } });
+    const payload = await introRes.json();
+    if (payload && !payload.error) {
+      const normalizeSegments = (segments: any[]) => {
+        return (segments || []).map((segment) => {
+          const startMs = segment.start_ms ?? 0;
+          const endMs = segment.end_ms ?? null;
+          return {
+            startMs,
+            endMs,
+            durationMs: endMs != null ? Math.max(endMs - startMs, 0) : null,
+            startsAtBeginning: segment.start_ms == null,
+            endsAtMediaEnd: segment.end_ms == null,
+          };
+        });
+      };
+      introDbSegmentsData = {
+        intro: normalizeSegments(payload?.intro),
+        recap: normalizeSegments(payload?.recap),
+        credits: normalizeSegments(payload?.credits),
+        preview: normalizeSegments(payload?.preview),
+      };
+    }
+  } catch (e) {
+    console.warn('Failed to fetch IntroDB timestamps for download:', e);
   }
 
   // Setup resumable download
@@ -262,6 +359,9 @@ export async function startDownload({
         episodeOverview,
         localVideoUri: downloadResult.uri,
         localPosterUri,
+        localSubtitleUri,
+        subtitleLanguage: localSubtitleUri ? finalSubtitleLanguage : null,
+        introDbSegments: introDbSegmentsData,
         quality,
         sizeStr: sizeStr || (sizeBytes > 0 ? (sizeBytes / (1024 * 1024)).toFixed(1) + ' MB' : 'Unknown'),
         sizeBytes,
@@ -280,11 +380,17 @@ export async function startDownload({
     activeDownloads.delete(key);
     notifyListeners();
 
-    // Cleanup half-downloaded file
+    // Cleanup half-downloaded files
     try {
       const fileInfo = await FileSystem.getInfoAsync(localVideoUri);
       if (fileInfo.exists) {
         await FileSystem.deleteAsync(localVideoUri, { idempotent: true });
+      }
+      if (localSubtitleUri) {
+        const subInfo = await FileSystem.getInfoAsync(localSubtitleUri);
+        if (subInfo.exists) {
+          await FileSystem.deleteAsync(localSubtitleUri, { idempotent: true });
+        }
       }
     } catch (e) {}
   }
@@ -337,6 +443,18 @@ export async function deleteDownload(mediaType: MediaType, id: number, season = 
       }
     } catch (e) {
       console.warn('Failed to delete video file:', item.localVideoUri, e);
+    }
+
+    // Delete subtitle file
+    if (item.localSubtitleUri) {
+      try {
+        const subInfo = await FileSystem.getInfoAsync(item.localSubtitleUri);
+        if (subInfo.exists) {
+          await FileSystem.deleteAsync(item.localSubtitleUri, { idempotent: true });
+        }
+      } catch (e) {
+        console.warn('Failed to delete subtitle file:', item.localSubtitleUri, e);
+      }
     }
 
     // Delete poster file (if no other episode uses it)

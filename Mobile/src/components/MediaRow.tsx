@@ -64,7 +64,7 @@ export default function MediaRow({ title, items, variant = 'default', onTitlePre
             shouldAnimate={shouldAnimate}
             onPress={() => {
               if (variant === 'communityWatchlist') {
-                // Not supported in mobile yet, but could be added later
+                router.push(`/main/home/watchlist/${item.id}` as any);
               } else if (variant === 'continueWatching') {
                 router.push(`/player/${item.mediaType}/${item.id}?season=${item.seasonNumber || 1}&episode=${item.episodeNumber || 1}` as any);
               } else if (item.mediaType && item.id) {

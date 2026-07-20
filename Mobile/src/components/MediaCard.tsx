@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   // Community Watchlist
   watchlistContainer: {
     marginHorizontal: 6,
-    width: 240,
+    width: 180,
     flexDirection: 'column',
     gap: 12,
   },

@@ -7,6 +7,8 @@ import {
   type SearchPlan,
 } from "./media";
 
+import { getAdultContentEnabled } from "./storage";
+
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 
 type TmdbListResponse<T> = {
@@ -119,7 +121,18 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
   const { bearer, key } = getAuth();
   const url = new URL(`${TMDB_BASE_URL}${path}`);
 
-  Object.entries({ language: "en-US", ...params }).forEach(([paramKey, value]) => {
+  let includeAdult = params.include_adult;
+  if (includeAdult === undefined) {
+    try {
+      includeAdult = await getAdultContentEnabled();
+    } catch {
+      includeAdult = false;
+    }
+  }
+
+  const finalParams = { language: "en-US", include_adult: includeAdult, ...params };
+
+  Object.entries(finalParams).forEach(([paramKey, value]) => {
     url.searchParams.set(paramKey, String(value));
   });
 
@@ -158,9 +171,9 @@ function normalizeMedia(item: TmdbMedia, forcedType?: MediaType): MediaSummary |
 
   if (!title) return null;
 
-  // Filter out unreleased titles with release dates in the future
+  // Filter out unreleased titles with missing release dates or release dates in the future
   const today = new Date().toISOString().slice(0, 10);
-  if (date && date > today) return null;
+  if (!date || date > today) return null;
 
   return {
     id: item.id,
@@ -518,16 +531,19 @@ export async function getMediaDetail(mediaType: MediaType, id: number): Promise<
 export async function getSeasonEpisodes(tvId: number, seasonNumber: number): Promise<Episode[]> {
   try {
     const data = await tmdbFetch<{ episodes: any[] }>(`/tv/${tvId}/season/${seasonNumber}`);
-    return (data.episodes ?? []).map(ep => ({
-      id: ep.id,
-      name: ep.name,
-      overview: ep.overview,
-      airDate: ep.air_date,
-      episodeNumber: ep.episode_number,
-      seasonNumber: ep.season_number,
-      runtime: ep.runtime,
-      stillPath: ep.still_path,
-    }));
+    const today = new Date().toISOString().slice(0, 10);
+    return (data.episodes ?? [])
+      .filter((ep) => ep.air_date && ep.air_date <= today)
+      .map((ep) => ({
+        id: ep.id,
+        name: ep.name,
+        overview: ep.overview,
+        airDate: ep.air_date,
+        episodeNumber: ep.episode_number,
+        seasonNumber: ep.season_number,
+        runtime: ep.runtime,
+        stillPath: ep.still_path,
+      }));
   } catch {
     return [];
   }

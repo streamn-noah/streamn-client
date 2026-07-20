@@ -765,11 +765,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   headerTitle: {
-    fontFamily: typography.headline.fontFamily,
+    ...typography.title,
+    fontSize: 24,
+    color: '#fff',
     fontWeight: '700',
-    fontSize: 28,
-    color: '#FFFFFF',
-    letterSpacing: 0,
   },
   headerIconBtn: {
     padding: 6,

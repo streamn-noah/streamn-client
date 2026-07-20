@@ -827,8 +827,9 @@ const styles = StyleSheet.create({
 
   },
   headerForYouText: {
+    ...typography.title,
+    fontSize: 24,
     color: '#fff',
-    fontSize: 22,
     fontWeight: '700',
   },
   headerIcons: {
