@@ -61,7 +61,7 @@ export default function Top10Screen() {
     <TouchableOpacity 
       style={styles.row} 
       activeOpacity={0.7}
-      onPress={() => router.push(`/detail/${item.mediaType}/${item.id}`)}
+      onPress={() => router.push(`/main/home/detail/${item.mediaType}/${item.id}` as any)}
     >
       <Image
         source={{ uri: tmdbImage(item.posterPath, 'w500') }}

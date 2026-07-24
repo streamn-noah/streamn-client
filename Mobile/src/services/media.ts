@@ -137,10 +137,11 @@ export function adjustDominantColor(color: string, fallback = '#1a1a1a'): string
     return fallback;
   }
 
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
-  if (luminance > 140) {
-    return fallback;
-  }
-  
-  return color;
+  // Blend the color with black (e.g. 55% black) so it becomes
+  // an ambient dark tint, while keeping enough color to be visible.
+  r = Math.floor(r * 0.45);
+  g = Math.floor(g * 0.45);
+  b = Math.floor(b * 0.45);
+
+  return `rgb(${r}, ${g}, ${b})`;
 }

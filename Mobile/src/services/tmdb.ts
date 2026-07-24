@@ -7,6 +7,8 @@ import {
   type SearchPlan,
 } from "./media";
 
+import { getAdultContentEnabled } from "./storage";
+
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 
 type TmdbListResponse<T> = {
@@ -105,12 +107,8 @@ export function fallbackPlan(prompt: string): SearchPlan {
 }
 
 function getAuth() {
-  const bearer = process.env.EXPO_PUBLIC_TMDB_BEARER_TOKEN;
-  const key = process.env.EXPO_PUBLIC_TMDB_API_KEY;
-
-  if (!bearer && !key) {
-    console.warn("Missing TMDB credentials. Set EXPO_PUBLIC_TMDB_BEARER_TOKEN or EXPO_PUBLIC_TMDB_API_KEY.");
-  }
+  const bearer = process.env.EXPO_PUBLIC_TMDB_BEARER_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI5ZWM3M2E0ODFhMzJjMDZmMWIwZjI5NTY5YzYwOGRhYyIsIm5iZiI6MTU4NTUwMzI0Mi4yODcwMDAyLCJzdWIiOiI1ZTgwZGMwYTJhMjEwYzAwMTcyYTNhZmUiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.oYZDf3JrrQXcQt-YKFp9JbESIfMglvgnS-ae_POA2vY';
+  const key = process.env.EXPO_PUBLIC_TMDB_API_KEY || '9ec73a481a32c06f1b0f29569c608dac';
 
   return { bearer, key };
 }
@@ -119,7 +117,18 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
   const { bearer, key } = getAuth();
   const url = new URL(`${TMDB_BASE_URL}${path}`);
 
-  Object.entries({ language: "en-US", ...params }).forEach(([paramKey, value]) => {
+  let includeAdult = params.include_adult;
+  if (includeAdult === undefined) {
+    try {
+      includeAdult = await getAdultContentEnabled();
+    } catch {
+      includeAdult = false;
+    }
+  }
+
+  const finalParams = { language: "en-US", include_adult: includeAdult, ...params };
+
+  Object.entries(finalParams).forEach(([paramKey, value]) => {
     url.searchParams.set(paramKey, String(value));
   });
 
@@ -158,9 +167,9 @@ function normalizeMedia(item: TmdbMedia, forcedType?: MediaType): MediaSummary |
 
   if (!title) return null;
 
-  // Filter out unreleased titles with release dates in the future
+  // Filter out unreleased titles with missing release dates or release dates in the future
   const today = new Date().toISOString().slice(0, 10);
-  if (date && date > today) return null;
+  if (!date || date > today) return null;
 
   return {
     id: item.id,
@@ -518,17 +527,34 @@ export async function getMediaDetail(mediaType: MediaType, id: number): Promise<
 export async function getSeasonEpisodes(tvId: number, seasonNumber: number): Promise<Episode[]> {
   try {
     const data = await tmdbFetch<{ episodes: any[] }>(`/tv/${tvId}/season/${seasonNumber}`);
-    return (data.episodes ?? []).map(ep => ({
-      id: ep.id,
-      name: ep.name,
-      overview: ep.overview,
-      airDate: ep.air_date,
-      episodeNumber: ep.episode_number,
-      seasonNumber: ep.season_number,
-      runtime: ep.runtime,
-      stillPath: ep.still_path,
-    }));
+    const today = new Date().toISOString().slice(0, 10);
+    return (data.episodes ?? [])
+      .filter((ep) => ep.air_date && ep.air_date <= today)
+      .map((ep) => ({
+        id: ep.id,
+        name: ep.name,
+        overview: ep.overview,
+        airDate: ep.air_date,
+        episodeNumber: ep.episode_number,
+        seasonNumber: ep.season_number,
+        runtime: ep.runtime,
+        stillPath: ep.still_path,
+      }));
   } catch {
+    return [];
+  }
+}
+
+export async function getPersonCredits(personId: number): Promise<MediaSummary[]> {
+  try {
+    const data = await tmdbFetch<{ cast: TmdbMedia[] }>(`/person/${personId}/combined_credits`);
+    return uniqueByMedia(
+      (data.cast ?? [])
+        .map((item) => normalizeMedia(item))
+        .filter(Boolean) as MediaSummary[]
+    );
+  } catch (error) {
+    console.error("getPersonCredits error", error);
     return [];
   }
 }

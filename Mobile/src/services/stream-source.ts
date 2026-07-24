@@ -1,4 +1,5 @@
-import { getMovieBoxStreams, getMovieBoxDownloadSources, MovieBoxLookupInput } from './moviebox';
+import { getDownload } from './download';
+import { getMovieBoxStreams, getMovieBoxDownloadSources, getMovieBoxSeasonDownloads, MovieBoxLookupInput } from './moviebox';
 import { getMediaDetail } from './tmdb';
 import { Platform } from 'react-native';
 
@@ -67,6 +68,22 @@ export async function fetchStreamSources(
   ignoreCache = false,
   mode: StreamSourceMode = "playback",
 ): Promise<StreamBackendResponse> {
+  // Check if a local download exists (always returns local file if downloaded, even if online)
+  const localDl = getDownload(type, id, season, episode);
+  if (localDl) {
+    return {
+      sources: [
+        {
+          url: localDl.localVideoUri,
+          quality: localDl.quality,
+          type: 'local',
+          size: localDl.sizeStr,
+        },
+      ],
+      subtitles: [],
+    };
+  }
+
   const key = getCacheKey(type, id, season, episode, mode);
 
   if (!ignoreCache) {
@@ -76,6 +93,7 @@ export async function fetchStreamSources(
     }
   }
 
+
   let wyzieSubtitles: SubtitleItem[] = [];
   try {
     const wyzieKey = process.env.EXPO_PUBLIC_WYZIE_API_KEY;
@@ -84,7 +102,7 @@ export async function fetchStreamSources(
       url.searchParams.set("id", String(id));
       url.searchParams.set("language", "en");
       url.searchParams.set("key", wyzieKey);
-      
+
       if (type === "tv") {
         url.searchParams.set("season", String(season));
         url.searchParams.set("episode", String(episode));
@@ -126,8 +144,8 @@ export async function fetchStreamSources(
     };
 
     // 2. Fetch directly from MovieBox
-    const response = mode === "download" 
-      ? await getMovieBoxDownloadSources(input) 
+    const response = mode === "download"
+      ? await getMovieBoxDownloadSources(input)
       : await getMovieBoxStreams(input);
 
     if (!response || !response.streams) {
@@ -141,13 +159,13 @@ export async function fetchStreamSources(
         return true;
       })
       .map((stream) => ({
-      url: stream.url,
-      quality: stream.quality,
-      type: stream.format || 'mp4',
-      size: stream.size,
-      duration: stream.duration,
-      provider: { name: 'MovieBox' },
-    }));
+        url: stream.url,
+        quality: stream.quality,
+        type: stream.format || 'mp4',
+        size: stream.size,
+        duration: stream.duration,
+        provider: { name: 'MovieBox' },
+      }));
 
     // Subtitles mapping
     let subtitles: SubtitleItem[] = [];
@@ -192,7 +210,6 @@ export function getFileSizeRange(sources: SourceItem[]): string | null {
 
   const sizedSources = sources.filter((s) => s.size);
   if (!sizedSources.length) return null;
-  if (sizedSources.length === 1) return sizedSources[0].size!;
 
   const parseSize = (sizeStr: string) => {
     const num = parseFloat(sizeStr);
@@ -201,14 +218,26 @@ export function getFileSizeRange(sources: SourceItem[]): string | null {
     return num;
   };
 
+  const formatSize = (sizeInMB: number) => {
+    if (sizeInMB >= 1024) {
+      const gb = sizeInMB / 1024;
+      return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`;
+    }
+    return `${Math.round(sizeInMB)} MB`;
+  };
+
   const sorted = [...sizedSources].sort(
     (a, b) => parseSize(a.size!) - parseSize(b.size!),
   );
-  const minSize = sorted[0].size!;
-  const maxSize = sorted[sorted.length - 1].size!;
 
-  if (minSize === maxSize) return minSize;
-  return `${minSize} - ${maxSize}`;
+  const minMB = parseSize(sorted[0].size!);
+  const maxMB = parseSize(sorted[sorted.length - 1].size!);
+
+  const formattedMin = formatSize(minMB);
+  const formattedMax = formatSize(maxMB);
+
+  if (formattedMin === formattedMax) return formattedMin;
+  return `${formattedMin} - ${formattedMax}`;
 }
 
 export function getCachedStreamSources(
@@ -224,4 +253,81 @@ export function getCachedStreamSources(
     return cached.data;
   }
   return null;
+}
+
+export async function prewarmStreamCache(
+  type: "movie" | "tv",
+  id: number,
+  season = 1,
+  episode = 1,
+) {
+  // Fire and forget to cache the response
+  fetchStreamSources(type, id, season, episode, false, "playback").catch(() => { });
+}
+
+export type SeasonDownloadResponse = {
+  responseId?: string;
+  expiresAt?: string;
+  episodes: Array<{
+    episode: number;
+    sources: SourceItem[];
+  }>;
+};
+
+export async function fetchSeasonDownloadSources(
+  type: "movie" | "tv",
+  id: number,
+  season = 1,
+): Promise<SeasonDownloadResponse> {
+  if (type === "movie") return { episodes: [] };
+
+  try {
+    const mediaDetail = await getMediaDetail(type, id);
+    if (!mediaDetail) {
+      throw new Error(`Media not found for ID: ${id}`);
+    }
+
+    const input: MovieBoxLookupInput = {
+      title: mediaDetail.title,
+      type,
+      year: mediaDetail.year,
+      season,
+    };
+
+    const pack = await getMovieBoxSeasonDownloads(input);
+    if (!pack || !pack.seasons) {
+      return { episodes: [] };
+    }
+
+    const seasonEntry = pack.seasons.find((entry) => entry.season === season);
+    if (!seasonEntry || !seasonEntry.episodes) {
+      return { episodes: [] };
+    }
+
+    const episodes = seasonEntry.episodes.map((ep) => {
+      const streams = ep.qualities ?? ep.streams ?? [];
+      const sources: SourceItem[] = streams.map((stream) => ({
+        url: stream.url,
+        quality: stream.quality,
+        type: stream.format || 'mp4',
+        size: stream.size,
+        duration: stream.duration,
+        provider: { name: 'MovieBox' },
+      }));
+
+      return {
+        episode: ep.episode,
+        sources: [...sources].sort((a, b) => {
+          const resA = parseInt(a.quality || "0");
+          const resB = parseInt(b.quality || "0");
+          return resB - resA;
+        }),
+      };
+    });
+
+    return { episodes };
+  } catch (error) {
+    console.error("Error in fetchSeasonDownloadSources:", error);
+    return { episodes: [] };
+  }
 }

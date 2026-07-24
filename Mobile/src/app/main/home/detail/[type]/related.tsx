@@ -58,7 +58,7 @@ export default function RelatedScreen() {
             <View style={styles.cardWrapper}>
               <MediaCard 
                 item={item} 
-                onPress={() => router.push(`/detail/${item.mediaType}/${item.id}`)}
+                onPress={() => router.push(`/main/home/detail/${item.mediaType}/${item.id}` as any)}
               />
             </View>
           )}

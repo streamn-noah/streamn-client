@@ -48,7 +48,7 @@ export default function MediaRow({ title, items, variant = 'default', onTitlePre
         style={styles.titleContainer}
       >
         <Text style={styles.rowTitle}>{title}</Text>
-        {onTitlePress && <Icon name="arrow-right-s-line" size={28} color="#fff" style={{ marginTop: 2 }} />}
+        {onTitlePress && <Text style={styles.viewMoreText}>View more</Text>}
       </TouchableOpacity>
       <FlatList
         data={items}
@@ -64,7 +64,9 @@ export default function MediaRow({ title, items, variant = 'default', onTitlePre
             shouldAnimate={shouldAnimate}
             onPress={() => {
               if (variant === 'communityWatchlist') {
-                // Not supported in mobile yet, but could be added later
+                router.push(`/main/home/watchlist/${item.id}` as any);
+              } else if (variant === 'continueWatching') {
+                router.push(`/player/${item.mediaType}/${item.id}?season=${item.seasonNumber || 1}&episode=${item.episodeNumber || 1}` as any);
               } else if (item.mediaType && item.id) {
                 router.push((`/main/home/detail/${item.mediaType}/${item.id}` as any));
               }
@@ -84,6 +86,7 @@ const styles = StyleSheet.create({
   titleContainer: {
     flexDirection: 'row', 
     alignItems: 'center', 
+    justifyContent: 'space-between',
     marginBottom: 12, 
     paddingHorizontal: 16 
   },
@@ -91,6 +94,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 20,
     fontWeight: '700',
+  },
+  viewMoreText: {
+    color: '#aaa',
+    fontSize: 14,
+    fontWeight: '600',
   },
   rowList: {
     paddingHorizontal: 12,

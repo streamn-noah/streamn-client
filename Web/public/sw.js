@@ -31,10 +31,16 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Fetch Event: Stale-while-revalidate for assets, Network-first for navigation
+// Fetch Event: Stale-while-revalidate for assets, Network-first for navigation, Stream proxy for videos
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Handle /api/proxy/video requests for direct client-side device IP streaming & API proxying
+  if (url.pathname === "/api/proxy/video" || url.pathname === "/_stream_proxy") {
+    event.respondWith(handleStreamProxy(request));
+    return;
+  }
 
   // Ignore non-GET requests or browser extension requests
   if (request.method !== "GET" || !url.protocol.startsWith("http")) {
@@ -63,42 +69,148 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          if (response.status === 200) {
+            const cacheCopy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cacheCopy));
+          }
           return response;
         })
-        .catch(() => {
-          return caches.match(request).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
-            return caches.match("/discover");
-          });
-        })
+        .catch(() => caches.match(request))
     );
     return;
   }
 
-  // Static Assets (Images, SVGs, Fonts, JS, CSS) -> Cache first, fallback to Network
+  // Static Assets -> Stale While Revalidate
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Revalidate background
-        fetch(request)
-          .then((networkResponse) => {
-            if (networkResponse.ok) {
-              caches.open(CACHE_NAME).then((cache) => cache.put(request, networkResponse));
-            }
-          })
-          .catch(() => {});
-        return cachedResponse;
-      }
+      const fetchPromise = fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse.status === 200) {
+            const cacheCopy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cacheCopy));
+          }
+          return networkResponse;
+        })
+        .catch(() => cachedResponse);
 
-      return fetch(request).then((networkResponse) => {
-        if (networkResponse.ok) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-        }
-        return networkResponse;
-      });
+      return cachedResponse || fetchPromise;
     })
   );
 });
+
+async function handleStreamProxy(request) {
+  const rawUrl = request.url;
+  const urlParamIndex = rawUrl.indexOf("url=");
+  let targetUrl = null;
+
+  if (urlParamIndex !== -1) {
+    const rawParam = rawUrl.substring(urlParamIndex + 4);
+    try {
+      targetUrl = decodeURIComponent(rawParam);
+    } catch {
+      targetUrl = rawParam;
+    }
+  }
+
+  if (!targetUrl) {
+    return new Response("Missing url parameter", { status: 400 });
+  }
+
+  const rangeHeader = request.headers.get("range");
+  const contentType = request.headers.get("content-type");
+  const xTimestamp = request.headers.get("x-client-timestamp");
+  const xNonce = request.headers.get("x-client-nonce");
+  const xSignature = request.headers.get("x-client-signature");
+  const xVersion = request.headers.get("x-client-version");
+  const xPlatform = request.headers.get("x-client-platform");
+  const authorization = request.headers.get("authorization");
+  const xTrSignature = request.headers.get("x-tr-signature");
+  const xClientToken = request.headers.get("x-client-token");
+  const xClientInfo = request.headers.get("x-client-info");
+
+  const reqAccept = request.headers.get("accept");
+  const acceptHeader = xTrSignature
+    ? "application/json"
+    : reqAccept && reqAccept !== "*/*"
+    ? reqAccept
+    : "*/*";
+
+  const fetchHeaders = {
+    "User-Agent":
+      "com.community.oneroom/50020044 (Linux; U; Android 13; en_US; 23078RKD5C; Build/TQ2A.230405.003; Cronet/135.0.7012.3)",
+    Accept: acceptHeader,
+    "Accept-Language": "en-US,en;q=0.9",
+    ...(rangeHeader ? { Range: rangeHeader } : {}),
+    ...(contentType ? { "Content-Type": contentType } : {}),
+    ...(xTimestamp ? { "X-Client-Timestamp": xTimestamp } : {}),
+    ...(xNonce ? { "X-Client-Nonce": xNonce } : {}),
+    ...(xSignature ? { "X-Client-Signature": xSignature } : {}),
+    ...(xVersion ? { "X-Client-Version": xVersion } : {}),
+    ...(xPlatform ? { "X-Client-Platform": xPlatform } : {}),
+    ...(authorization ? { Authorization: authorization } : {}),
+    ...(xTrSignature ? { "x-tr-signature": xTrSignature } : {}),
+    ...(xClientToken ? { "X-Client-Token": xClientToken } : {}),
+    ...(xClientInfo ? { "X-Client-Info": xClientInfo } : {}),
+  };
+
+  const hasBody = ["POST", "PUT", "PATCH"].includes(request.method);
+  const response = await fetch(targetUrl, {
+    method: request.method,
+    headers: fetchHeaders,
+    body: hasBody ? await request.arrayBuffer() : undefined,
+    redirect: "follow",
+  });
+
+  const responseHeaders = new Headers(response.headers);
+  responseHeaders.delete("content-encoding");
+  responseHeaders.set("Access-Control-Allow-Origin", "*");
+  responseHeaders.set("Access-Control-Expose-Headers", "*");
+
+  if (request.method === "HEAD" || !response.body) {
+    return new Response(null, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  }
+
+  const isVideo = (response.headers.get("content-type") || "").includes("video") || targetUrl.includes(".mp4");
+
+  if (isVideo) {
+    const HEV1 = new Uint8Array([104, 101, 118, 49]); // 'hev1'
+    const HVC1 = new Uint8Array([104, 118, 99, 49]); // 'hvc1'
+
+    const transformStream = new TransformStream({
+      transform(chunk, controller) {
+        let offset = 0;
+        while (true) {
+          let found = -1;
+          for (let i = offset; i < chunk.length - 3; i++) {
+            if (
+              chunk[i] === HEV1[0] &&
+              chunk[i + 1] === HEV1[1] &&
+              chunk[i + 2] === HEV1[2] &&
+              chunk[i + 3] === HEV1[3]
+            ) {
+              found = i;
+              break;
+            }
+          }
+          if (found === -1) break;
+          chunk.set(HVC1, found);
+          offset = found + 4;
+        }
+        controller.enqueue(chunk);
+      },
+    });
+
+    return new Response(response.body.pipeThrough(transformStream), {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    headers: responseHeaders,
+  });
+}

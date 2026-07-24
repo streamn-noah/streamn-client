@@ -10,6 +10,7 @@ import CustomPlayer from '@/components/streamn/custom-player';
 import { getMediaDetail } from '@/services/tmdb';
 import { MediaSummary, MediaType } from '@/services/media';
 import { fetchStreamSources, getFileSizeRange } from '@/services/stream-source';
+import { getDownload } from '@/services/download';
 
 export default function PlayerScreen() {
   const { type, id, season, episode } = useLocalSearchParams();
@@ -40,7 +41,41 @@ export default function PlayerScreen() {
         const sNum = season ? Number(season) : 1;
         const eNum = episode ? Number(episode) : 1;
 
-        const detail = await getMediaDetail(mediaType, mediaId);
+        let detail = null;
+        try {
+          detail = await getMediaDetail(mediaType, mediaId);
+        } catch (err) {
+          console.warn("Failed to fetch media detail from TMDB, checking local downloads:", err);
+        }
+
+        if (!detail && active) {
+          const download = getDownload(mediaType, mediaId, sNum, eNum);
+          if (download) {
+            detail = {
+              id: download.id,
+              mediaType: download.mediaType,
+              title: download.title,
+              subtitle: '',
+              overview: download.overview,
+              posterPath: download.localPosterUri || download.posterPath,
+              backdropPath: download.backdropPath,
+              voteAverage: download.voteAverage,
+              year: download.year,
+              genreIds: [],
+              runtime: download.runtime,
+              certification: 'PG-13',
+              genres: [],
+              logoPath: null,
+              trailerKey: null,
+              cast: [],
+              recommendations: [],
+              seasons: [],
+              episodes: [],
+              videos: [],
+            } as any;
+          }
+        }
+
         if (!active) return;
         
         if (detail) {
@@ -71,6 +106,7 @@ export default function PlayerScreen() {
 
     return () => { active = false; };
   }, [type, id, season, episode]);
+
 
   if (loading || !item) {
     return (
