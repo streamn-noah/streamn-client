@@ -1,14 +1,31 @@
 import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router/tabs';
-import { BlurView } from 'expo-blur';
+import { useRouter, useSegments } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 import Icon from 'react-native-remix-icon';
-import { colors } from '@/constants/theme';
+import { colors, typography } from '@/constants/theme';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { DefaultAvatarFace } from '@/components/ui/default-avatar';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 export default function MainLayout() {
+  const { isOffline } = useNetworkStatus();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (isOffline) {
+      const isPlayer = segments[0] === 'player';
+      const isDownloads = segments[0] === 'main' && segments[1] === 'downloads';
+      
+      if (!isPlayer && !isDownloads) {
+        router.replace('/main/downloads');
+      }
+    }
+  }, [isOffline, segments]);
+
   return (
     <Tabs
       screenOptions={{
@@ -16,20 +33,17 @@ export default function MainLayout() {
         tabBarStyle: {
           position: 'absolute',
           borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.2)',
+          borderTopColor: 'rgba(38, 38, 38, 0.33)',
           elevation: 0,
           height: 90,
-          backgroundColor: 'transparent',
+          backgroundColor: 'black',
           paddingTop: 8,
         },
-        tabBarBackground: () => (
-          <BlurView intensity={100} style={StyleSheet.absoluteFill} tint="dark" />
-        ),
         tabBarActiveTintColor: colors.white,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarShowLabel: true,
         tabBarLabelStyle: {
-          fontFamily: 'System',
+          fontFamily: typography.caption.fontFamily,
           fontWeight: '500',
           fontSize: 10,
           marginBottom: 10,
@@ -40,6 +54,7 @@ export default function MainLayout() {
         name="home"
         options={{
           title: 'Home',
+          href: isOffline ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name={focused ? 'home-fill' : 'home-line'} color={color} focused={focused} />
           ),
@@ -49,17 +64,18 @@ export default function MainLayout() {
         name="search"
         options={{
           title: 'Search',
+          href: isOffline ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'search-fill' : 'search-line'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'search-line' : 'search-line'} color={color} focused={focused} />
           ),
         }}
       />
       <Tabs.Screen
-        name="library"
+        name="downloads"
         options={{
-          title: 'Library',
+          title: 'Downloads',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'bookmark-fill' : 'bookmark-line'} color={color} focused={focused} />
+            <TabIcon name={focused ? 'download-line' : 'download-line'} color={color} focused={focused} />
           ),
         }}
       />
@@ -67,6 +83,7 @@ export default function MainLayout() {
         name="account"
         options={{
           title: 'Account',
+          href: isOffline ? null : undefined,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon name="" color={color} focused={focused} isAvatar={true} />
           ),
@@ -75,6 +92,7 @@ export default function MainLayout() {
     </Tabs>
   );
 }
+
 
 function TabIcon({ name, color, focused, isAvatar }: { name: any; color: any; focused: boolean; isAvatar?: boolean }) {
   const opacity = useSharedValue(focused ? 1 : 0);

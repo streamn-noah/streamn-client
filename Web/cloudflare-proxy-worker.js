@@ -1,38 +1,74 @@
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const targetUrl = url.searchParams.get('url');
-
     // Handle CORS preflight requests
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
-          "Access-Control-Allow-Headers": request.headers.get("Access-Control-Request-Headers") || "Range",
+          "Access-Control-Allow-Headers": "*",
           "Access-Control-Max-Age": "86400",
         }
       });
+    }
+
+    const rawUrl = request.url;
+    const urlParamIndex = rawUrl.indexOf('url=');
+    let targetUrl = null;
+
+    if (urlParamIndex !== -1) {
+      const rawParam = rawUrl.substring(urlParamIndex + 4);
+      try {
+        targetUrl = decodeURIComponent(rawParam);
+      } catch {
+        targetUrl = rawParam;
+      }
     }
 
     if (!targetUrl) {
       return new Response('Missing url parameter', { status: 400 });
     }
 
-    const headers = new Headers(request.headers);
-    headers.delete('host');
-    headers.delete('connection');
-    headers.delete('accept-encoding');
-    headers.delete('origin');
-    headers.delete('referer');
+    const rangeHeader = request.headers.get('range');
+    const contentType = request.headers.get('content-type');
+    const xTimestamp = request.headers.get('x-client-timestamp');
+    const xNonce = request.headers.get('x-client-nonce');
+    const xSignature = request.headers.get('x-client-signature');
+    const xVersion = request.headers.get('x-client-version');
+    const xPlatform = request.headers.get('x-client-platform');
 
+    const fetchHeaders = {
+      'User-Agent': 'com.community.oneroom/50020044 (Linux; U; Android 13; en_US; 23078RKD5C; Build/TQ2A.230405.003; Cronet/135.0.7012.3)',
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      ...(rangeHeader ? { Range: rangeHeader } : {}),
+      ...(contentType ? { 'Content-Type': contentType } : {}),
+      ...(xTimestamp ? { 'X-Client-Timestamp': xTimestamp } : {}),
+      ...(xNonce ? { 'X-Client-Nonce': xNonce } : {}),
+      ...(xSignature ? { 'X-Client-Signature': xSignature } : {}),
+      ...(xVersion ? { 'X-Client-Version': xVersion } : {}),
+      ...(xPlatform ? { 'X-Client-Platform': xPlatform } : {}),
+    };
+
+    const hasBody = ['POST', 'PUT', 'PATCH'].includes(request.method);
     const response = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-        Accept: 'video/mp4,video/*;q=0.9,*/*;q=0.8',
-        ...(request.headers.get('range') ? { Range: request.headers.get('range') } : {})
-      }
+      method: request.method,
+      headers: fetchHeaders,
+      body: hasBody ? await request.arrayBuffer() : undefined,
+      redirect: 'follow'
     });
+
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.delete('content-encoding');
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
+    responseHeaders.set('Access-Control-Expose-Headers', '*');
+
+    if (request.method === 'HEAD' || !response.body) {
+      return new Response(null, {
+        status: response.status,
+        headers: responseHeaders
+      });
+    }
 
     const HEV1 = new Uint8Array([104, 101, 118, 49]); // 'hev1'
     const HVC1 = new Uint8Array([104, 118, 99, 49]); // 'hvc1'
@@ -56,12 +92,7 @@ export default {
       }
     });
 
-    const responseHeaders = new Headers(response.headers);
-    responseHeaders.delete('content-encoding');
-    // Ensure the player can access the stream from any origin
-    responseHeaders.set('Access-Control-Allow-Origin', '*');
-
-    return new Response(response.body ? response.body.pipeThrough(transformStream) : null, {
+    return new Response(response.body.pipeThrough(transformStream), {
       status: response.status,
       headers: responseHeaders
     });

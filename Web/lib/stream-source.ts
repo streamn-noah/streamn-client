@@ -1,3 +1,5 @@
+import { fetchDirectMovieBoxStreams } from "./moviebox-direct";
+
 export type AudioTrackItem = {
   label?: string;
   language?: string;
@@ -107,6 +109,47 @@ export async function fetchStreamSources(
     // Ensure arrays exist
     data.sources = Array.isArray(data.sources) ? data.sources : [];
     data.subtitles = Array.isArray(data.subtitles) ? data.subtitles : [];
+
+    // Fallback: If server returned empty sources (due to datacenter region blocking), resolve streams directly from browser IP
+    if (data.sources.length === 0 && typeof window !== "undefined") {
+      try {
+        const tmdbRes = await fetch(`https://api.themoviedb.org/3/${type}/${id}?api_key=9ec73a481a32c06f1b0f29569c608dac`);
+        if (tmdbRes.ok) {
+          const tmdbData = await tmdbRes.json();
+          const mediaTitle = tmdbData.title || tmdbData.name;
+          const releaseDate = tmdbData.release_date || tmdbData.first_air_date;
+          const mediaYear = releaseDate ? parseInt(releaseDate.split("-")[0], 10) : undefined;
+
+          if (mediaTitle) {
+            console.log(`[StreamSource Web] Server returned empty sources, resolving directly from device IP for "${mediaTitle}"...`);
+            const directMb = await fetchDirectMovieBoxStreams({
+              title: mediaTitle,
+              type,
+              year: mediaYear,
+              season,
+              episode,
+            });
+
+            if (directMb && directMb.streams.length > 0) {
+              data.sources = directMb.streams.map((stream) => ({
+                url: stream.url,
+                quality: stream.quality,
+                type: stream.format || "mp4",
+                provider: { id: "moviebox", name: "MovieBox Direct" },
+                size: stream.size,
+                duration: stream.duration,
+              }));
+              if (directMb.subjectId) {
+                providerIdCache.set(baseKey, directMb.subjectId);
+                data.responseId = directMb.subjectId;
+              }
+            }
+          }
+        }
+      } catch (directErr) {
+        console.warn("[StreamSource Web] Direct device IP fallback failed:", directErr);
+      }
+    }
 
     if (data.responseId) {
       providerIdCache.set(baseKey, data.responseId);
