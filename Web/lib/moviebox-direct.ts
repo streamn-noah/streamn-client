@@ -50,6 +50,7 @@ type MovieBoxSearchItem = {
   releaseDate?: string | null;
   language?: string | null;
   hasResource?: boolean;
+  resourceDetectors?: any[];
 };
 
 export type MovieBoxLookupInput = {
@@ -292,30 +293,6 @@ function scoreSearchItem(input: MovieBoxLookupInput, item: MovieBoxSearchItem): 
   return score;
 }
 
-type MovieBoxSearchItem = {
-  subjectId: string;
-  type: "movie" | "tv" | "shorts" | string;
-  title: string;
-  releaseDate?: string | null;
-  language?: string | null;
-  hasResource?: boolean;
-  resourceDetectors?: any[];
-};
-
-export type MovieBoxLookupInput = {
-  title: string;
-  type: "movie" | "tv";
-  year?: number | string | null;
-  season?: number;
-  episode?: number;
-  subjectId?: string;
-};
-
-export type MovieBoxDirectResponse = {
-  title: string;
-  subjectId: string;
-  streams: MovieBoxStream[];
-};
 
 function extractStreamsFromItem(item: MovieBoxSearchItem): MovieBoxStream[] {
   const streams: MovieBoxStream[] = [];
