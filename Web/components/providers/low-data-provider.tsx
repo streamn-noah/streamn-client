@@ -48,7 +48,7 @@ export function LowDataProvider({ children }: { children: ReactNode }) {
 export function useLowDataMode() {
   const context = useContext(LowDataContext);
   if (context === undefined) {
-    throw new Error("useLowDataMode must be used within a LowDataProvider");
+    return { isLowDataMode: false, toggleLowDataMode: () => {} };
   }
   return context;
 }

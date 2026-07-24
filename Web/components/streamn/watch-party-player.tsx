@@ -116,26 +116,35 @@ export function WatchPartyPlayer({
     }, false);
   }, [sendData, activeHostIdentity, localIdentity]);
 
+  const [micStates, setMicStates] = useState<Record<string, boolean>>({});
+
   // Toggle microphone
   const toggleMic = async () => {
     if (!localParticipant) return;
     const isEnabled = localParticipant.isMicrophoneEnabled;
-    await localParticipant.setMicrophoneEnabled(!isEnabled);
+    const nextState = !isEnabled;
+    await localParticipant.setMicrophoneEnabled(nextState);
+    sendData({ type: "mic_status", sender: localIdentity, micEnabled: nextState }, true);
   };
 
   // Turn on mic by default when entering player
   useEffect(() => {
     if (localParticipant) {
       localParticipant.setMicrophoneEnabled(true).catch(console.error);
+      sendData({ type: "mic_status", sender: localIdentity, micEnabled: true }, true);
     }
-  }, [localParticipant]);
+  }, [localParticipant, localIdentity, sendData]);
 
   // Listen to room data events directly
   useEffect(() => {
     const handleDataReceived = (payload: Uint8Array) => {
       try {
-        const data = JSON.parse(new TextDecoder().decode(payload));
-        if (!playerRef.current) return;
+        const jsonStr = new TextDecoder().decode(payload);
+        const data = JSON.parse(jsonStr);
+
+        if (data.type === "mic_status" && data.sender) {
+          setMicStates((prev) => ({ ...prev, [data.sender]: data.micEnabled }));
+        }
 
         if (data.type === "start_party") {
           setPartyStatus("playing");
@@ -156,6 +165,8 @@ export function WatchPartyPlayer({
             const msgTimestamp = data.timestamp || Date.now();
             const latency = (Date.now() - msgTimestamp) / 1000;
             const expectedTime = Math.max(0, hostTime + (targetIsPlaying ? latency : 0));
+
+            if (!playerRef.current) return;
 
             const guestTime = playerRef.current.getCurrentTime();
             const guestPlaying = playerRef.current.getIsPlaying();
@@ -179,6 +190,8 @@ export function WatchPartyPlayer({
         }
 
         if (data.type === "user_action") {
+          if (!playerRef.current) return;
+
           // Action triggered by any user (Play / Pause / Seek)
           ignoreLocalEventsUntilRef.current = Date.now() + 1500;
 
@@ -191,7 +204,7 @@ export function WatchPartyPlayer({
           }
 
           // If I am the Host, immediately broadcast fresh host_sync as source of truth
-          if (isEffectiveHost && playerRef.current) {
+          if (isEffectiveHost) {
             const currentTime = data.action === "seek" ? data.time : playerRef.current.getCurrentTime();
             const isPlaying = data.action === "play" ? true : data.action === "pause" ? false : playerRef.current.getIsPlaying();
             broadcastHostSync(currentTime, isPlaying);
@@ -539,7 +552,11 @@ export function WatchPartyPlayer({
                         </button>
                       ) : (
                         <div className="flex items-center gap-1">
-                          {!p.isMicrophoneEnabled && <MicOff className="size-4 text-white/20" />}
+                          {(micStates[p.identity] ?? p.isMicrophoneEnabled) ? (
+                            <Mic className="size-4 text-green-400" />
+                          ) : (
+                            <MicOff className="size-4 text-white/20" />
+                          )}
                           {isEffectiveHost && (
                             <button
                               onClick={() => handleKickParticipant(p.identity)}

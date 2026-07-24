@@ -1,7 +1,7 @@
+import { getDownload } from './download';
 import { getMovieBoxStreams, getMovieBoxDownloadSources, getMovieBoxSeasonDownloads, MovieBoxLookupInput } from './moviebox';
 import { getMediaDetail } from './tmdb';
 import { Platform } from 'react-native';
-import { getDownload } from './download';
 
 export type AudioTrackItem = {
   label?: string;
@@ -102,7 +102,7 @@ export async function fetchStreamSources(
       url.searchParams.set("id", String(id));
       url.searchParams.set("language", "en");
       url.searchParams.set("key", wyzieKey);
-      
+
       if (type === "tv") {
         url.searchParams.set("season", String(season));
         url.searchParams.set("episode", String(episode));
@@ -144,8 +144,8 @@ export async function fetchStreamSources(
     };
 
     // 2. Fetch directly from MovieBox
-    const response = mode === "download" 
-      ? await getMovieBoxDownloadSources(input) 
+    const response = mode === "download"
+      ? await getMovieBoxDownloadSources(input)
       : await getMovieBoxStreams(input);
 
     if (!response || !response.streams) {
@@ -159,13 +159,13 @@ export async function fetchStreamSources(
         return true;
       })
       .map((stream) => ({
-      url: stream.url,
-      quality: stream.quality,
-      type: stream.format || 'mp4',
-      size: stream.size,
-      duration: stream.duration,
-      provider: { name: 'MovieBox' },
-    }));
+        url: stream.url,
+        quality: stream.quality,
+        type: stream.format || 'mp4',
+        size: stream.size,
+        duration: stream.duration,
+        provider: { name: 'MovieBox' },
+      }));
 
     // Subtitles mapping
     let subtitles: SubtitleItem[] = [];
@@ -262,7 +262,7 @@ export async function prewarmStreamCache(
   episode = 1,
 ) {
   // Fire and forget to cache the response
-  fetchStreamSources(type, id, season, episode, false, "playback").catch(() => {});
+  fetchStreamSources(type, id, season, episode, false, "playback").catch(() => { });
 }
 
 export type SeasonDownloadResponse = {

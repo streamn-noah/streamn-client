@@ -610,6 +610,25 @@ export default function MediaDetailModal() {
     }
   };
 
+  const handleWatchTogether = () => {
+    if (!detail) return;
+    const roomId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+
+    router.push({
+      pathname: '/watchparty/[id]',
+      params: {
+        id: roomId,
+        mediaType: detail.mediaType,
+        mediaId: String(detail.id),
+        season: String(season),
+        episode: String(episode),
+        host: '1',
+      },
+    });
+  };
+
   const handleShare = async () => {
     if (!detail) return;
     try {
@@ -957,7 +976,7 @@ export default function MediaDetailModal() {
             <TouchableOpacity
               style={styles.watchTogetherButton}
               activeOpacity={0.8}
-              onPress={() => setIsWatchPartyModalOpen(true)}
+              onPress={handleWatchTogether}
             >
               <Icon name="tv-2-line" size={20} color="#fff" />
               <Text style={styles.watchTogetherText}>Watch Together</Text>

@@ -38,7 +38,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="main" options={{ headerShown: false }} />
         <Stack.Screen name="player" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-        <Stack.Screen name="watchparty" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="watchparty/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       </Stack>
       <StatusBar style="light" />
     </AuthProvider>

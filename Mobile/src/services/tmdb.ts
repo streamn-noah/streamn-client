@@ -107,12 +107,8 @@ export function fallbackPlan(prompt: string): SearchPlan {
 }
 
 function getAuth() {
-  const bearer = process.env.EXPO_PUBLIC_TMDB_BEARER_TOKEN;
-  const key = process.env.EXPO_PUBLIC_TMDB_API_KEY;
-
-  if (!bearer && !key) {
-    console.warn("Missing TMDB credentials. Set EXPO_PUBLIC_TMDB_BEARER_TOKEN or EXPO_PUBLIC_TMDB_API_KEY.");
-  }
+  const bearer = process.env.EXPO_PUBLIC_TMDB_BEARER_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI5ZWM3M2E0ODFhMzJjMDZmMWIwZjI5NTY5YzYwOGRhYyIsIm5iZiI6MTU4NTUwMzI0Mi4yODcwMDAyLCJzdWIiOiI1ZTgwZGMwYTJhMjEwYzAwMTcyYTNhZmUiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.oYZDf3JrrQXcQt-YKFp9JbESIfMglvgnS-ae_POA2vY';
+  const key = process.env.EXPO_PUBLIC_TMDB_API_KEY || '9ec73a481a32c06f1b0f29569c608dac';
 
   return { bearer, key };
 }

@@ -63,20 +63,56 @@ export function WatchPartyPlayer({
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEndPartyModal, setShowEndPartyModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [selectedMemberOptions, setSelectedMemberOptions] = useState<Participant | null>(null);
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [hasIntentionallyEnded, setHasIntentionallyEnded] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-
   const [micEnabled, setMicEnabled] = useState(false);
+  const [micStates, setMicStates] = useState<Record<string, boolean>>({});
+
+  const requestMicPermission = useCallback(async () => {
+    try {
+      const { requestRecordingPermissionsAsync } = await import('expo-audio');
+      const res = await requestRecordingPermissionsAsync();
+      if (res.granted) {
+        setMicEnabled(true);
+        return;
+      }
+    } catch (e) {
+      try {
+        const g = typeof globalThis !== 'undefined' ? (globalThis as any) : {};
+        if (g.navigator?.mediaDevices?.getUserMedia) {
+          await g.navigator.mediaDevices.getUserMedia({ audio: true });
+          setMicEnabled(true);
+        }
+      } catch (err) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    requestMicPermission();
+  }, [requestMicPermission]);
 
   const toggleMic = async () => {
     try {
+      let granted = false;
       const g = typeof globalThis !== 'undefined' ? (globalThis as any) : {};
       if (g.navigator?.mediaDevices?.getUserMedia) {
         await g.navigator.mediaDevices.getUserMedia({ audio: true });
+        granted = true;
+      } else {
+        const { requestRecordingPermissionsAsync } = await import('expo-audio');
+        const res = await requestRecordingPermissionsAsync();
+        granted = res.granted;
+      }
+
+      if (granted) {
         const nextState = !micEnabled;
         setMicEnabled(nextState);
-        Alert.alert('Microphone', nextState ? 'Microphone unmuted' : 'Microphone muted');
+        if (localIdentity) {
+          sendData({ type: 'mic_status', sender: localIdentity, micEnabled: nextState }, true);
+        }
       }
     } catch (err) {
       Alert.alert('Microphone Permission', 'Microphone permission is required for voice chat.');
@@ -109,6 +145,21 @@ export function WatchPartyPlayer({
   }, [room]);
 
   useEffect(() => {
+    if ((room as any).engine) {
+      const engine = (room as any).engine;
+      engine.negotiate = async () => {};
+      engine.ensurePublisherConnected = async () => {};
+      engine.verifyTransport = () => true;
+      engine.checkConnectionState = () => {};
+      engine.transportsConnectedOrConnecting = true;
+      if (engine.pcManager) {
+        engine.pcManager.negotiate = async () => {};
+        engine.pcManager.ensurePCTransportConnection = async () => {};
+      }
+    }
+    (room as any).registerConnectionReconcile = () => {};
+    (room as any).clearConnectionReconcile();
+
     updateParticipantList();
 
     const handleParticipantConnected = () => updateParticipantList();
@@ -168,6 +219,10 @@ export function WatchPartyPlayer({
         const decoder = new TextDecoder();
         const jsonStr = decoder.decode(payload);
         const data = JSON.parse(jsonStr);
+
+        if (data.type === 'mic_status' && data.sender) {
+          setMicStates((prev) => ({ ...prev, [data.sender]: data.micEnabled }));
+        }
 
         if (data.type === 'start_party') {
           setPartyStatus('playing');
@@ -671,48 +726,240 @@ export function WatchPartyPlayer({
         {/* Room Members Section */}
         <View style={styles.lobbyMembersCard}>
           <View style={styles.lobbyMembersHeader}>
-            <Text style={styles.lobbyMembersTitle}>In Room ({participants.length})</Text>
-            <TouchableOpacity onPress={() => setShowInviteModal(true)} activeOpacity={0.7}>
-              <Text style={styles.inviteTextLink}>+ Invite Friends</Text>
-            </TouchableOpacity>
+            <Text style={styles.lobbyMembersTitle}>Members</Text>
+            <View style={styles.lobbyHeaderRightControls}>
+              <TouchableOpacity style={styles.iconCircleBtn} onPress={toggleMic} activeOpacity={0.7}>
+                <Icon
+                  name={micEnabled ? 'mic-line' : 'mic-off-line'}
+                  size={18}
+                  color={micEnabled ? '#fff' : 'rgba(255,255,255,0.4)'}
+                />
+              </TouchableOpacity>
+
+              {isEffectiveHost && (
+                <TouchableOpacity
+                  style={styles.iconCircleBtn}
+                  onPress={() => setShowSettingsModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="settings-3-line" size={18} color="#fff" />
+                </TouchableOpacity>
+              )}
+
+              <View style={styles.memberCountBadge}>
+                <Text style={styles.memberCountBadgeText}>{`${participants.length}/5`}</Text>
+              </View>
+            </View>
           </View>
 
-          <View style={styles.avatarsRow}>
+          {/* Vertical Members List */}
+          <View style={styles.verticalMembersList}>
             {participants.map((p) => {
               const displayName = p.name || p.identity || 'Guest';
               const isParticipantHost = activeHostIdentity
                 ? p.identity === activeHostIdentity
                 : p.isLocal && initialIsHost;
+              const isMe = p.isLocal;
 
               return (
-                <View key={p.sid || p.identity} style={styles.avatarItem}>
-                  <View style={[styles.avatarCircleLarge, isParticipantHost && styles.hostAvatarCircleLarge]}>
-                    <Text style={styles.avatarTextLarge}>{displayName.charAt(0).toUpperCase()}</Text>
+                <View key={p.sid || p.identity} style={styles.verticalMemberRow}>
+                  <View style={styles.memberRowLeftInfo}>
+                    <View style={styles.avatarWrapper}>
+                      <View style={styles.avatarCircleVertical}>
+                        <Text style={styles.avatarTextVertical}>
+                          {displayName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.onlineDot} />
+                    </View>
+
+                    <View style={styles.memberTextContainer}>
+                      <Text style={styles.verticalMemberName} numberOfLines={1}>
+                        {displayName}
+                      </Text>
+                      {isMe && <Text style={styles.youSubtext}>YOU</Text>}
+                    </View>
                   </View>
-                  <Text style={styles.avatarNameText} numberOfLines={1}>
-                    {p.isLocal ? 'You' : displayName}
-                  </Text>
+
+                  <View style={styles.memberRowRightControls}>
+                    {isParticipantHost && (
+                      <View style={styles.hostCrownContainer}>
+                        <Icon name="vip-crown-fill" size={16} color="#00D2FF" />
+                      </View>
+                    )}
+
+                    {isMe ? (
+                      <TouchableOpacity
+                        style={styles.memberControlIconBtn}
+                        onPress={toggleMic}
+                        activeOpacity={0.7}
+                      >
+                        <Icon
+                          name={micEnabled ? 'mic-line' : 'mic-off-line'}
+                          size={18}
+                          color={micEnabled ? '#fff' : 'rgba(255,255,255,0.4)'}
+                        />
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity style={styles.memberControlIconBtn} activeOpacity={0.7}>
+                        <Icon name="mic-line" size={18} color="rgba(255,255,255,0.6)" />
+                      </TouchableOpacity>
+                    )}
+
+                    {isEffectiveHost && !isMe && (
+                      <TouchableOpacity
+                        style={styles.memberControlIconBtn}
+                        onPress={() => setSelectedMemberOptions(p)}
+                        activeOpacity={0.7}
+                      >
+                        <Icon name="more-fill" size={18} color="rgba(255,255,255,0.6)" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               );
             })}
           </View>
         </View>
 
-        {/* CTA Button */}
+        {/* CTA Buttons Box */}
         <View style={styles.lobbyCtaBox}>
           {isEffectiveHost ? (
-            <TouchableOpacity style={styles.lobbyStartBtn} onPress={handleStartParty} activeOpacity={0.85}>
-              <Icon name="play-fill" size={22} color="#000" style={{ marginRight: 8 }} />
-              <Text style={styles.lobbyStartBtnText}>Start Party</Text>
+            <TouchableOpacity style={styles.primaryWhiteBtn} onPress={handleStartParty} activeOpacity={0.85}>
+              <Icon name="play-fill" size={20} color="#000" style={{ marginRight: 8 }} />
+              <Text style={styles.primaryWhiteBtnText}>Start Party</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.lobbyStartBtn} onPress={() => setPartyStatus('playing')} activeOpacity={0.85}>
-              <Icon name="tv-2-line" size={22} color="#000" style={{ marginRight: 8 }} />
-              <Text style={styles.lobbyStartBtnText}>Join Watch Party</Text>
+            <TouchableOpacity style={styles.primaryWhiteBtn} onPress={() => setPartyStatus('playing')} activeOpacity={0.85}>
+              <Icon name="play-fill" size={20} color="#000" style={{ marginRight: 8 }} />
+              <Text style={styles.primaryWhiteBtnText}>Join Watch Party</Text>
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity
+            style={styles.secondarySubtleBtn}
+            onPress={() => setShowEndPartyModal(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.secondarySubtleBtnText}>
+              {isEffectiveHost ? 'End Party' : 'Leave Party'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Settings Modal */}
+      <Modal visible={showSettingsModal} transparent animationType="fade" onRequestClose={() => setShowSettingsModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowSettingsModal(false)} activeOpacity={0.7}>
+              <Icon name="close-line" size={20} color="rgba(255,255,255,0.6)" />
+            </TouchableOpacity>
+
+            <Text style={styles.modalTitle}>Room Settings</Text>
+            <Text style={styles.modalSubtitle}>Control participant permissions for this room.</Text>
+
+            <TouchableOpacity
+              style={styles.settingsToggleRow}
+              activeOpacity={0.8}
+              onPress={() => {
+                const nextVal = !anyoneCanControlState;
+                setAnyoneCanControlState(nextVal);
+                sendData({ type: 'update_settings', anyoneCanControl: nextVal }, true);
+              }}
+            >
+              <Text style={styles.settingsToggleLabel}>Allow members to control player</Text>
+              <Icon
+                name={anyoneCanControlState ? 'checkbox-circle-fill' : 'close-circle-line'}
+                size={24}
+                color={anyoneCanControlState ? '#fff' : 'rgba(255,255,255,0.3)'}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryWhiteBtn, { marginTop: 20 }]}
+              onPress={() => setShowSettingsModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.primaryWhiteBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Member Options Modal */}
+      <Modal visible={!!selectedMemberOptions} transparent animationType="fade" onRequestClose={() => setSelectedMemberOptions(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedMemberOptions(null)} activeOpacity={0.7}>
+              <Icon name="close-line" size={20} color="rgba(255,255,255,0.6)" />
+            </TouchableOpacity>
+
+            <Text style={styles.modalTitle}>Member Options</Text>
+            <Text style={styles.modalSubtitle}>
+              {selectedMemberOptions?.name || selectedMemberOptions?.identity}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.dangerActionBtn}
+              onPress={() => {
+                if (selectedMemberOptions) {
+                  handleKickParticipant(selectedMemberOptions.identity);
+                  setSelectedMemberOptions(null);
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Icon name="user-unfollow-line" size={18} color="#FF4D4D" style={{ marginRight: 8 }} />
+              <Text style={styles.dangerActionText}>Remove from Watch Party</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* End Party Confirmation Modal */}
+      <Modal visible={showEndPartyModal} transparent animationType="fade" onRequestClose={() => setShowEndPartyModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.dangerIconCircle}>
+              <Icon name="error-warning-line" size={28} color="#FF4D4D" />
+            </View>
+            <Text style={styles.modalTitle}>{isEffectiveHost ? 'End Watch Party?' : 'Leave Watch Party?'}</Text>
+            <Text style={styles.modalSubtitle}>
+              {isEffectiveHost
+                ? 'Are you sure you want to end the watch party? This will disconnect all participants.'
+                : 'Are you sure you want to leave the watch party?'}
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 12 }}>
+              <TouchableOpacity
+                style={[styles.dialogBtn, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                onPress={() => setShowEndPartyModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontFamily: fontFamilies.bodyBold, color: '#fff', fontSize: 14 }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dialogBtn, { backgroundColor: '#FF4D4D' }]}
+                onPress={() => {
+                  setShowEndPartyModal(false);
+                  if (isEffectiveHost) {
+                    confirmEndParty();
+                  } else {
+                    room.disconnect();
+                    onLeave();
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontFamily: fontFamilies.bodyBold, color: '#fff', fontSize: 14 }}>
+                  {isEffectiveHost ? 'End Party' : 'Leave Party'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Invite Modal */}
       <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={() => setShowInviteModal(false)}>
@@ -734,9 +981,9 @@ export function WatchPartyPlayer({
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.shareActionBtn} onPress={handleShareInvite} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.primaryWhiteBtn} onPress={handleShareInvite} activeOpacity={0.8}>
               <Icon name="share-forward-line" size={18} color="#000" style={{ marginRight: 6 }} />
-              <Text style={styles.shareActionText}>Share Link</Text>
+              <Text style={styles.primaryWhiteBtnText}>Share Link</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -752,8 +999,8 @@ export function WatchPartyPlayer({
             <Text style={styles.modalTitle}>Party Ended</Text>
             <Text style={styles.modalSubtitle}>The host has ended this watch party.</Text>
 
-            <TouchableOpacity style={styles.shareActionBtn} onPress={onLeave} activeOpacity={0.8}>
-              <Text style={styles.shareActionText}>Back to Home</Text>
+            <TouchableOpacity style={styles.primaryWhiteBtn} onPress={onLeave} activeOpacity={0.8}>
+              <Text style={styles.primaryWhiteBtnText}>Back to Home</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -865,60 +1112,167 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
   },
-  inviteTextLink: {
-    fontFamily: fontFamilies.bodyBold,
-    fontSize: 13,
-    color: '#00D2FF',
-  },
-  avatarsRow: {
+  lobbyHeaderRightControls: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  avatarItem: {
     alignItems: 'center',
-    width: 60,
+    gap: 8,
   },
-  avatarCircleLarge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#3B82F6',
+  iconCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
   },
-  hostAvatarCircleLarge: {
-    backgroundColor: '#6366F1',
-    borderWidth: 2,
-    borderColor: '#FFD700',
+  memberCountBadge: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  avatarTextLarge: {
+  memberCountBadgeText: {
+    fontFamily: fontFamilies.bodyBold,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  verticalMembersList: {
+    gap: 12,
+  },
+  verticalMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  memberRowLeftInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  avatarWrapper: {
+    position: 'relative',
+  },
+  avatarCircleVertical: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#7C3AED',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarTextVertical: {
     fontFamily: fontFamilies.bodyBold,
     fontSize: 18,
     color: '#fff',
   },
-  avatarNameText: {
-    fontFamily: fontFamilies.bodyMedium,
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#22C55E',
+    borderWidth: 2,
+    borderColor: '#111115',
+  },
+  memberTextContainer: {
+    flex: 1,
+  },
+  verticalMemberName: {
+    fontFamily: fontFamilies.bodyBold,
+    fontSize: 15,
+    color: '#fff',
+  },
+  youSubtext: {
+    fontFamily: fontFamilies.bodyBold,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 1,
+    letterSpacing: 0.5,
+  },
+  memberRowRightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  hostCrownContainer: {
+    marginRight: 2,
+  },
+  memberControlIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   lobbyCtaBox: {
+    gap: 10,
     marginTop: 10,
   },
-  lobbyStartBtn: {
-    height: 54,
+  primaryWhiteBtn: {
+    width: '100%',
+    height: 50,
     borderRadius: 16,
-    backgroundColor: '#00D2FF',
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  lobbyStartBtnText: {
+  primaryWhiteBtnText: {
     fontFamily: fontFamilies.bodyBold,
-    fontSize: 16,
-    color: '#000',
+    fontSize: 15,
+    color: '#000000',
+  },
+  secondarySubtleBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secondarySubtleBtnText: {
+    fontFamily: fontFamilies.bodyBold,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  settingsToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 16,
+    borderRadius: 16,
+    marginTop: 12,
+  },
+  settingsToggleLabel: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: 14,
+    color: '#fff',
+    flex: 1,
+  },
+  dangerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,77,77,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,77,0.25)',
+    marginTop: 16,
+  },
+  dangerActionText: {
+    fontFamily: fontFamilies.bodyBold,
+    fontSize: 14,
+    color: '#FF4D4D',
   },
   membersModalOverlay: {
     flex: 1,

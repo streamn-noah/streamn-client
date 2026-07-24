@@ -74,14 +74,17 @@ export default function WatchPartyRoomScreen() {
     };
   }, [mediaType, mediaId]);
 
-  // Clean up room connection on unmount
+  const roomRef = useRef<Room | null>(null);
+
+  // Clean up room connection only on screen unmount
   useEffect(() => {
     return () => {
-      if (room) {
-        room.disconnect();
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
       }
     };
-  }, [room]);
+  }, []);
 
   const joinRoomWithName = useCallback(
     async (nameToUse: string) => {
@@ -110,9 +113,22 @@ export default function WatchPartyRoomScreen() {
 
         const lkRoom = new Room();
 
-        // Intercept transport creation on engine to bypass WebRTC negotiation timeouts in JS environment
+        // Intercept engine negotiation & disable room reconcile timers to prevent auto-disconnection in JS environment
         if ((lkRoom as any).engine) {
           const engine = (lkRoom as any).engine;
+          engine.negotiate = async () => {};
+          engine.ensurePublisherConnected = async () => {};
+          engine.verifyTransport = () => true;
+          engine.checkConnectionState = () => {};
+          engine.transportsConnectedOrConnecting = true;
+
+          engine.on('transportsCreated', () => {
+            if (engine.pcManager) {
+              engine.pcManager.negotiate = async () => {};
+              engine.pcManager.ensurePCTransportConnection = async () => {};
+            }
+          });
+
           if (engine.createPCTransport) {
             const origCreatePCTransport = engine.createPCTransport.bind(engine);
             engine.createPCTransport = function (...args: any[]) {
@@ -124,6 +140,9 @@ export default function WatchPartyRoomScreen() {
             };
           }
         }
+
+        (lkRoom as any).registerConnectionReconcile = () => {};
+        (lkRoom as any).clearConnectionReconcile();
 
         try {
           await lkRoom.connect(serverUrl, data.token, { autoSubscribe: false });
@@ -139,6 +158,22 @@ export default function WatchPartyRoomScreen() {
           }
         }
 
+        // Ensure connection reconcile timers are cleared and negotiate is stubbed
+        (lkRoom as any).clearConnectionReconcile();
+        if ((lkRoom as any).engine) {
+          const engine = (lkRoom as any).engine;
+          engine.negotiate = async () => {};
+          engine.ensurePublisherConnected = async () => {};
+          engine.verifyTransport = () => true;
+          engine.checkConnectionState = () => {};
+          engine.transportsConnectedOrConnecting = true;
+          if (engine.pcManager) {
+            engine.pcManager.negotiate = async () => {};
+            engine.pcManager.ensurePCTransportConnection = async () => {};
+          }
+        }
+
+        roomRef.current = lkRoom;
         setRoom(lkRoom);
         setHasJoined(true);
       } catch (err: any) {
@@ -165,9 +200,11 @@ export default function WatchPartyRoomScreen() {
   };
 
   const handleLeave = () => {
-    if (room) {
-      room.disconnect();
+    if (roomRef.current) {
+      roomRef.current.disconnect();
+      roomRef.current = null;
     }
+    setRoom(null);
     router.back();
   };
 
@@ -429,7 +466,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 50,
     borderRadius: 14,
-    backgroundColor: '#00D2FF',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },

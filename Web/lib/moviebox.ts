@@ -1,4 +1,6 @@
-const WORKER_URL = process.env.MOVIEBOX_API_URL || "https://spun-moviebox-api-chi.vercel.app";
+import { fetchDirectMovieBoxStreams } from "./moviebox-direct";
+
+const WORKER_URL = process.env.MOVIEBOX_API_URL || "https://moviebox-api-umber.vercel.app";
 const WORKER_SECRET = process.env.MOVIEBOX_WORKER_SECRET || "local-secret-12345";
 const SUBJECT_MATCH_TTL_MS = 6 * 60 * 60 * 1000;
 const DOWNLOAD_PACK_TTL_MS = 60 * 1000;
@@ -82,6 +84,25 @@ function normalizeTitle(value: string): string {
     .trim();
 }
 
+function isNonEnglishDub(title: string, language?: string | null): boolean {
+  const haystack = `${title} ${language ?? ''}`;
+  const bracketDubPattern =
+    /[\[(].*?\b(hindi|tamil|telugu|malayalam|kannada|bengali|punjabi|urdu|spanish|espanol|latino|french|german|italian|korean|japanese|arabic|portuguese|russian|chinese|thai|indonesian|filipino|dub|dubbed|dual-audio|multi-audio)\b.*?[\])]/i;
+
+  if (bracketDubPattern.test(haystack)) {
+    return true;
+  }
+
+  const wordDubPattern =
+    /\b(hindi|tamil|telugu|malayalam|kannada|bengali|punjabi|urdu|dubbed|dual-audio|multi-audio)\b/i;
+
+  if (wordDubPattern.test(haystack)) {
+    return true;
+  }
+
+  return false;
+}
+
 function getYearFromDate(value?: string | null): string | null {
   if (!value) return null;
   const match = value.match(/\b(19|20)\d{2}\b/);
@@ -91,7 +112,7 @@ function getYearFromDate(value?: string | null): string | null {
 function getLanguageScore(item: MovieBoxSearchItem): number {
   const haystack = `${item.title} ${item.language ?? ""}`;
   if (ENGLISH_PREFERRED_PATTERN.test(haystack)) return 25;
-  if (NON_ENGLISH_PATTERN.test(haystack)) return -35;
+  if (isNonEnglishDub(item.title, item.language)) return -500;
   return 5;
 }
 
@@ -114,6 +135,14 @@ function scoreSearchItem(input: MovieBoxLookupInput, item: MovieBoxSearchItem): 
   if (input.type === "movie" && item.type !== "movie") return -1000;
   if (input.type === "tv" && item.type !== "tv") return -1000;
 
+  const inputIsDub = isNonEnglishDub(input.title);
+  const candidateIsDub = isNonEnglishDub(item.title, item.language);
+
+  // Disqualify dubbed / non-English releases if the user is looking for an original / English title
+  if (candidateIsDub && !inputIsDub) {
+    return -10000;
+  }
+
   let score = getTitleScore(input, item) + getLanguageScore(item);
 
   const candidateYear = getYearFromDate(item.releaseDate);
@@ -135,22 +164,59 @@ function sortStreamsByQuality(streams: MovieBoxStream[]): MovieBoxStream[] {
 }
 
 async function fetchMovieBoxJson<T>(path: string, init?: RequestInit): Promise<T | null> {
-  const response = await fetch(`${WORKER_URL}${path}`, {
-    ...init,
-    headers: {
-      "X-Worker-Secret": WORKER_SECRET,
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+  const proxyBase = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL || "https://streamn-proxy.dethstroke23.workers.dev";
 
-  if (!response.ok) {
-    console.error(`MovieBox request failed: ${response.status} ${response.statusText} for ${path}`);
-    return null;
+  if (WORKER_URL) {
+    try {
+      const response = await fetch(`${WORKER_URL}${path}`, {
+        ...init,
+        headers: {
+          "X-Worker-Secret": WORKER_SECRET,
+          "X-Forwarded-For": "197.210.65.1",
+          "X-Real-IP": "197.210.65.1",
+          Accept: "application/json",
+          ...(init?.headers ?? {}),
+        },
+        cache: "no-store",
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as T;
+        if (data && (Array.isArray((data as any).items) ? (data as any).items.length > 0 : true)) {
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn(`Direct WORKER_URL request failed for ${path}, trying proxy worker...`);
+    }
   }
 
-  return (await response.json()) as T;
+  if (proxyBase && WORKER_URL) {
+    try {
+      const targetUrl = `${WORKER_URL}${path}`;
+      const proxyUrl = `${proxyBase.replace(/\/$/, "")}?url=${encodeURIComponent(targetUrl)}`;
+
+      const response = await fetch(proxyUrl, {
+        ...init,
+        headers: {
+          "X-Worker-Secret": WORKER_SECRET,
+          "X-Forwarded-For": "197.210.65.1",
+          "X-Real-IP": "197.210.65.1",
+          Accept: "application/json",
+          ...(init?.headers ?? {}),
+        },
+        cache: "no-store",
+      });
+
+      if (response.ok) {
+        return (await response.json()) as T;
+      }
+    } catch (err) {
+      console.error(`Proxy WORKER_URL request failed for ${path}:`, err);
+    }
+  }
+
+  return null;
 }
 
 async function resolveMovieBoxMatch(input: MovieBoxLookupInput): Promise<MovieBoxSearchItem | null> {
@@ -189,33 +255,42 @@ async function resolveMovieBoxMatch(input: MovieBoxLookupInput): Promise<MovieBo
 }
 
 export async function getMovieBoxStreams(input: MovieBoxLookupInput): Promise<MovieBoxResponse | null> {
-  if (!WORKER_URL) {
-    console.warn("MOVIEBOX_API_URL environment variable is not defined");
-    return null;
-  }
-
   try {
     const match = input.subjectId 
       ? { subjectId: input.subjectId, title: input.title, type: input.type } as MovieBoxSearchItem
       : await resolveMovieBoxMatch(input);
-    if (!match) return null;
 
-    const querySeason = input.type === "movie" ? 0 : input.season ?? 1;
-    const queryEpisode = input.type === "movie" ? 0 : input.episode ?? 1;
+    if (match) {
+      const querySeason = input.type === "movie" ? 0 : input.season ?? 1;
+      const queryEpisode = input.type === "movie" ? 0 : input.episode ?? 1;
 
-    const streamData = await fetchMovieBoxJson<{ streams?: MovieBoxStream[] }>(
-      `/stream/${match.subjectId}?se=${querySeason}&ep=${queryEpisode}&_nocache=${Date.now()}`,
-    );
+      const streamData = await fetchMovieBoxJson<{ streams?: MovieBoxStream[] }>(
+        `/stream/${match.subjectId}?se=${querySeason}&ep=${queryEpisode}&_nocache=${Date.now()}`,
+      );
 
-    return {
-      title: match.title,
-      subjectId: match.subjectId,
-      streams: sortStreamsByQuality(streamData?.streams ?? []),
-    };
+      if (streamData?.streams && streamData.streams.length > 0) {
+        return {
+          title: match.title,
+          subjectId: match.subjectId,
+          streams: sortStreamsByQuality(streamData.streams),
+        };
+      }
+    }
+
+    // Direct fallback on Node server if WORKER_URL fails or returns empty
+    const directResult = await fetchDirectMovieBoxStreams(input);
+    if (directResult && directResult.streams.length > 0) {
+      return {
+        title: directResult.title,
+        subjectId: directResult.subjectId,
+        streams: sortStreamsByQuality(directResult.streams),
+      };
+    }
   } catch (error) {
     console.error("Error in getMovieBoxStreams:", error);
-    return null;
   }
+
+  return null;
 }
 
 export async function getMovieBoxDownloadSources(

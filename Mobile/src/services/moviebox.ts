@@ -249,6 +249,25 @@ function normalizeTitle(value: string): string {
     .trim();
 }
 
+function isNonEnglishDub(title: string, language?: string | null): boolean {
+  const haystack = `${title} ${language ?? ''}`;
+  const bracketDubPattern =
+    /[\[(].*?\b(hindi|tamil|telugu|malayalam|kannada|bengali|punjabi|urdu|spanish|espanol|latino|french|german|italian|korean|japanese|arabic|portuguese|russian|chinese|thai|indonesian|filipino|dub|dubbed|dual-audio|multi-audio)\b.*?[\])]/i;
+
+  if (bracketDubPattern.test(haystack)) {
+    return true;
+  }
+
+  const wordDubPattern =
+    /\b(hindi|tamil|telugu|malayalam|kannada|bengali|punjabi|urdu|dubbed|dual-audio|multi-audio)\b/i;
+
+  if (wordDubPattern.test(haystack)) {
+    return true;
+  }
+
+  return false;
+}
+
 function getYearFromDate(value?: string | null): string | null {
   if (!value) return null;
   const match = value.match(/\b(19|20)\d{2}\b/);
@@ -258,7 +277,7 @@ function getYearFromDate(value?: string | null): string | null {
 function getLanguageScore(item: MovieBoxSearchItem): number {
   const haystack = `${item.title} ${item.language ?? ""}`;
   if (ENGLISH_PREFERRED_PATTERN.test(haystack)) return 25;
-  if (NON_ENGLISH_PATTERN.test(haystack)) return -35;
+  if (isNonEnglishDub(item.title, item.language)) return -500;
   return 5;
 }
 
@@ -280,6 +299,14 @@ function getTitleScore(input: MovieBoxLookupInput, item: MovieBoxSearchItem): nu
 function scoreSearchItem(input: MovieBoxLookupInput, item: MovieBoxSearchItem): number {
   if (input.type === "movie" && item.type !== "movie") return -1000;
   if (input.type === "tv" && item.type !== "tv") return -1000;
+
+  const inputIsDub = isNonEnglishDub(input.title);
+  const candidateIsDub = isNonEnglishDub(item.title, item.language);
+
+  // Disqualify dubbed / non-English releases if the user is looking for an original / English title
+  if (candidateIsDub && !inputIsDub) {
+    return -10000;
+  }
 
   let score = getTitleScore(input, item) + getLanguageScore(item);
 

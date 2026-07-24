@@ -14,7 +14,7 @@ import {
   LayoutChangeEvent,
   Easing,
 } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView, isPictureInPictureSupported } from 'expo-video';
 import Icon from 'react-native-remix-icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -25,7 +25,9 @@ import { fetchStreamSources, SourceItem, SubtitleItem } from '@/services/stream-
 import { saveWatchProgress, getWatchProgress, getPreferredVideoQuality } from '@/services/storage';
 import { getDownload } from '@/services/download';
 import { getMediaDetail, getSeasonEpisodes } from '@/services/tmdb';
+import { prepareIosH265Stream } from '@/services/local-h265-patcher';
 import { typography } from '@/constants/theme';
+import { Platform } from 'react-native';
 
 export type CustomPlayerHandle = {
   postCommand: (func: string, args?: any[]) => void;
@@ -227,6 +229,7 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
 
   // Animation & Timers
+  const videoViewRef = useRef<VideoView>(null);
   const controlsOpacity = useRef(new Animated.Value(1)).current;
   const skipAnim = useRef(new Animated.Value(0)).current;
   const hideControlsTimer = useRef<any>(null);
@@ -328,7 +331,7 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
           preview: normalizeSegments(payload?.preview),
         });
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => {
       active = false;
@@ -392,17 +395,45 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
     }
   }, [selectedSeasonForEpisodes, mediaType, loadEpisodesForSeason]);
 
+  const [useDirectFallback, setUseDirectFallback] = useState(false);
+  const [resolvedIosUri, setResolvedIosUri] = useState<string | null>(null);
+
   const activeSource = sources[sourceIndex];
 
+  useEffect(() => {
+    let active = true;
+    if (Platform.OS === 'ios' && activeSource?.url && !activeSource.url.startsWith('file://')) {
+      prepareIosH265Stream(activeSource.url).then((uri) => {
+        if (active) setResolvedIosUri(uri);
+      });
+    } else {
+      setResolvedIosUri(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [activeSource]);
+
   const tryNextSource = useCallback(() => {
+    // If proxy failed for the current source, try the direct raw URL once before skipping to next resolution
+    if (!useDirectFallback) {
+      console.warn(`[CustomPlayer] Proxy failed for source ${sourceIndex} (${activeSource?.quality}), trying direct CDN stream URL...`);
+      setUseDirectFallback(true);
+      setIsBuffering(true);
+      return;
+    }
+
+    setUseDirectFallback(false);
     if (sourceIndex < sources.length - 1) {
+      console.warn(`[CustomPlayer] Source ${sourceIndex} (${activeSource?.quality}) failed completely. Switching to source ${sourceIndex + 1}...`);
       setSourceIndex(sourceIndex + 1);
       setIsBuffering(true);
     } else {
+      console.error('[CustomPlayer] All video stream sources failed to play.');
       setError('The sources are currently down.');
       setIsBuffering(false);
     }
-  }, [sourceIndex, sources]);
+  }, [sourceIndex, sources, useDirectFallback, activeSource]);
 
   const videoSource = useMemo(() => {
     if (!activeSource?.url) return null;
@@ -411,27 +442,66 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
       return { uri: activeSource.url };
     }
 
+    if (Platform.OS === 'ios' && resolvedIosUri) {
+      console.log('[CustomPlayer] iOS playing local patched H.265 file:', resolvedIosUri);
+      return { uri: resolvedIosUri };
+    }
+
     const cleanedUrl = activeSource.url.replace(/(https?:\/\/[^/]+)\/\/+/g, '$1/');
     const isHls = cleanedUrl.includes('.m3u8') || activeSource.type === 'hls' || activeSource.type === 'm3u8';
-    const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-    const videoProxyUrl = process.env.EXPO_PUBLIC_VIDEO_PROXY_URL || `${backendUrl}/api/proxy/video`;
 
-    const proxyUrl = isHls ? cleanedUrl : `${videoProxyUrl}?url=${encodeURIComponent(cleanedUrl)}`;
+    // On Android, always stream 100% directly from CDN (Android natively handles hev1 H.265).
+    // On iOS, only use remote proxy if EXPO_PUBLIC_VIDEO_PROXY_URL is set and not using fallback.
+    const isAndroid = Platform.OS === 'android';
+    const explicitProxyUrl = isAndroid ? undefined : process.env.EXPO_PUBLIC_VIDEO_PROXY_URL;
+    const proxyUrl = (isAndroid || isHls || useDirectFallback || !explicitProxyUrl)
+      ? cleanedUrl
+      : `${explicitProxyUrl}?url=${encodeURIComponent(cleanedUrl)}`;
+
+    if (isAndroid) {
+      console.log('[CustomPlayer] Playing direct CDN stream on Android:', proxyUrl);
+    }
 
     return {
       uri: proxyUrl,
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+          'com.community.oneroom/50020044 (Linux; U; Android 13; en_US; 23078RKD5C; Build/TQ2A.230405.003; Cronet/135.0.7012.3)',
         Accept: 'video/mp4,video/*;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
       },
     };
-  }, [activeSource]);
+  }, [activeSource, resolvedIosUri, useDirectFallback]);
 
   const player = useVideoPlayer(videoSource, (p) => {
     if (autoPlay) p.play();
   });
+
+  // Ensure Expo Video updates player source when videoSource changes (quality switch or fallback)
+  useEffect(() => {
+    if (player && videoSource) {
+      try {
+        if (typeof (player as any).replaceAsync === 'function') {
+          (player as any).replaceAsync(videoSource);
+        } else {
+          player.replace(videoSource);
+        }
+        if (autoPlay) player.play();
+      } catch (e) {
+        console.warn('[CustomPlayer] Failed to replace video source:', e);
+      }
+    }
+  }, [player, videoSource, autoPlay]);
+
+  const handleTogglePiP = useCallback(async () => {
+    try {
+      if (videoViewRef.current) {
+        await videoViewRef.current.startPictureInPicture();
+      }
+    } catch (err) {
+      console.error('[CustomPlayer] Error starting Picture in Picture:', err);
+    }
+  }, []);
 
   useImperativeHandle(
     ref,
@@ -530,9 +600,8 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
             console.error('Error seeking to watch progress:', err);
           }
         }
-      } else if (e.status === 'loading') {
-        setIsBuffering(true);
       } else if (e.status === 'error') {
+        console.warn(`[CustomPlayer] Playback error on source index ${sourceIndex} (${activeSource?.quality}, fallback=${useDirectFallback}):`, (e as any)?.error || e);
         tryNextSource();
       }
     });
@@ -552,7 +621,7 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
           if (player.duration > 0) setDuration(player.duration);
           progressRef.current = { currentTime: player.currentTime, duration: player.duration || 0 };
         }
-      } catch (e) {}
+      } catch (e) { }
     }, 1000);
 
     return () => {
@@ -567,7 +636,7 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
     if (player) {
       try {
         player.pause();
-      } catch (e) {}
+      } catch (e) { }
     }
     onClose();
   };
@@ -598,17 +667,14 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' && player) {
+      if (state !== 'active' && player && !isPictureInPictureSupported()) {
         try {
           player.pause();
-        } catch (e) {}
+        } catch (e) { }
       }
     });
     return () => {
       sub.remove();
-      try {
-        player?.pause();
-      } catch (e) {}
     };
   }, [player]);
 
@@ -895,11 +961,21 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
   return (
     <View style={styles.container}>
       <VideoView
+        ref={videoViewRef}
         style={StyleSheet.absoluteFill}
         player={player}
-        allowsPictureInPicture={false}
+        allowsPictureInPicture={true}
+        startsPictureInPictureAutomatically={true}
         nativeControls={false}
         contentFit="contain"
+        onPictureInPictureStart={() => {
+          setShowControls(false);
+          onVideoEvent?.('pipStart', player?.currentTime || 0, player?.duration || 0);
+        }}
+        onPictureInPictureStop={() => {
+          setShowControls(true);
+          onVideoEvent?.('pipStop', player?.currentTime || 0, player?.duration || 0);
+        }}
       />
 
       {/* Subtitles Overlay */}
@@ -986,7 +1062,7 @@ const CustomPlayer = forwardRef<CustomPlayerHandle, CustomPlayerProps>(function 
               </TouchableOpacity>
 
               {/* PiP Button */}
-              <TouchableOpacity onPress={() => {}} activeOpacity={0.7} style={styles.nakedIconBtn}>
+              <TouchableOpacity onPress={handleTogglePiP} activeOpacity={0.7} style={styles.nakedIconBtn}>
                 <Icon name="picture-in-picture-line" size={22} color="#fff" />
               </TouchableOpacity>
 

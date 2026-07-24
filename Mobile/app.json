@@ -15,7 +15,8 @@
       },
       "bundleIdentifier": "com.knoah23.streamn",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {
@@ -57,7 +58,13 @@
         }
       ],
       "expo-sharing",
-      "expo-video",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ],
       "expo-image",
       "expo-status-bar",
       "expo-web-browser"
