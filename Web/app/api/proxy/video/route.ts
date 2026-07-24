@@ -63,7 +63,7 @@ async function proxyHandler(req: NextRequest) {
     const hasBody = ["POST", "PUT", "PATCH"].includes(req.method);
     const body = hasBody ? await req.arrayBuffer() : undefined;
 
-    // Use Cloudflare Worker proxy as server-side fallback to avoid Node TLS undici handshake errors
+    // Use Cloudflare Worker proxy as server-side fallback to avoid Node TLS undici handshake errors and data-center IP rate limits (429/403)
     const workerProxyBase = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL || "https://streamn-proxy.dethstroke23.workers.dev";
     let response: Response;
     try {
@@ -72,6 +72,9 @@ async function proxyHandler(req: NextRequest) {
         headers,
         body,
       });
+      if (!response.ok && response.status !== 206) {
+        throw new Error(`Upstream returned status ${response.status}`);
+      }
     } catch {
       const proxyFetchUrl = `${workerProxyBase.replace(/\/$/, "")}?url=${encodeURIComponent(targetUrl)}`;
       response = await fetch(proxyFetchUrl, {

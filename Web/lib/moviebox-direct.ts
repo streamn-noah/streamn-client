@@ -211,11 +211,14 @@ async function getAuthToken(): Promise<string | null> {
     const urlStr = `${base}/wefeed-mobile-bff/tab-operating?page=1&tabId=0&version=`;
     const headers = buildHeaders("GET", urlStr, null, null);
 
-    const workerProxyBase = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL || "https://streamn-proxy.dethstroke23.workers.dev";
+    const workerProxyBase = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL;
+    const baseUrl = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "";
     const urlsToTry =
       typeof window !== "undefined"
-        ? [`/api/proxy/video?url=${encodeURIComponent(urlStr)}`, urlStr]
-        : [urlStr, `${workerProxyBase.replace(/\/$/, "")}?url=${encodeURIComponent(urlStr)}`];
+        ? [`${baseUrl}/api/proxy/video?url=${encodeURIComponent(urlStr)}`, urlStr]
+        : workerProxyBase
+          ? [`${workerProxyBase.replace(/\/$/, "")}?url=${encodeURIComponent(urlStr)}`, urlStr]
+          : [urlStr];
 
     for (const fetchUrl of urlsToTry) {
       try {
@@ -342,11 +345,14 @@ export async function searchSubject(title: string): Promise<MovieBoxSearchItem[]
     const urlStr = `${base}/wefeed-mobile-bff/subject-api/search`;
     const headers = buildHeaders("POST", urlStr, bodyStr, authToken, "application/json; charset=utf-8");
 
-    const workerProxyBase = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL || "https://streamn-proxy.dethstroke23.workers.dev";
+    const workerProxyBase = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL;
+    const baseUrl = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "";
     const urlsToTry =
       typeof window !== "undefined"
-        ? [`/api/proxy/video?url=${encodeURIComponent(urlStr)}`, urlStr]
-        : [urlStr, `${workerProxyBase.replace(/\/$/, "")}?url=${encodeURIComponent(urlStr)}`];
+        ? [`${baseUrl}/api/proxy/video?url=${encodeURIComponent(urlStr)}`, urlStr]
+        : workerProxyBase
+          ? [`${workerProxyBase.replace(/\/$/, "")}?url=${encodeURIComponent(urlStr)}`, urlStr]
+          : [urlStr];
 
     for (const fetchUrl of urlsToTry) {
       try {
@@ -419,11 +425,14 @@ async function fetchResourcePack(
       const urlStr = url.toString();
       const headers = buildHeaders("GET", urlStr, null, authToken);
 
-      const workerProxyBase = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL || "https://streamn-proxy.dethstroke23.workers.dev";
+      const workerProxyBase = process.env.NEXT_PUBLIC_VIDEO_PROXY_URL;
+      const baseUrl = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "";
       const urlsToTry =
         typeof window !== "undefined"
-          ? [`/api/proxy/video?url=${encodeURIComponent(urlStr)}`, urlStr]
-          : [urlStr, `${workerProxyBase.replace(/\/$/, "")}?url=${encodeURIComponent(urlStr)}`];
+          ? [`${baseUrl}/api/proxy/video?url=${encodeURIComponent(urlStr)}`, urlStr]
+          : workerProxyBase
+            ? [`${workerProxyBase.replace(/\/$/, "")}?url=${encodeURIComponent(urlStr)}`, urlStr]
+            : [urlStr];
 
       for (const fetchUrl of urlsToTry) {
         try {
