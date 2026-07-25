@@ -1,4 +1,4 @@
-const CACHE_NAME = "streamn-pwa-v1";
+const CACHE_NAME = "streamn-pwa-v2";
 const STATIC_ASSETS = [
   "/discover",
   "/library",
@@ -36,9 +36,8 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Handle /api/proxy/video requests for direct client-side device IP streaming & API proxying
+  // Bypass service worker for /api/proxy/video and /_stream_proxy to let Next.js server proxy handle streaming & CORS
   if (url.pathname === "/api/proxy/video" || url.pathname === "/_stream_proxy") {
-    event.respondWith(handleStreamProxy(request));
     return;
   }
 
