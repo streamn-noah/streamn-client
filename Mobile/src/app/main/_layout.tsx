@@ -1,14 +1,21 @@
 import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router/tabs';
 import { useRouter, useSegments } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, View } from 'react-native';
-import Icon from 'react-native-remix-icon';
-import { colors, typography } from '@/constants/theme';
-import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
+import { StyleSheet, View, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { colors } from '@/constants/theme';
 import { DefaultAvatarFace } from '@/components/ui/default-avatar';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import {
+  HomeSmileAngleIcon as HomeSmileAngleBold,
+  MagnifierIcon as MagnifierBold,
+  ArchiveDownMinimalisticIcon as ArchiveDownMinimalisticBold,
+} from '@solar-icons/react-native/bold';
+import {
+  HomeSmileAngleIcon as HomeSmileAngleLinear,
+  MagnifierIcon as MagnifierLinear,
+  ArchiveDownMinimalisticIcon as ArchiveDownMinimalisticLinear,
+} from '@solar-icons/react-native/linear';
 
 export default function MainLayout() {
   const { isOffline } = useNetworkStatus();
@@ -19,7 +26,7 @@ export default function MainLayout() {
     if (isOffline) {
       const isPlayer = segments[0] === 'player';
       const isDownloads = segments[0] === 'main' && segments[1] === 'downloads';
-      
+
       if (!isPlayer && !isDownloads) {
         router.replace('/main/downloads');
       }
@@ -30,34 +37,34 @@ export default function MainLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarShowLabel: false,
         tabBarStyle: {
           position: 'absolute',
           borderTopWidth: 1,
-          borderTopColor: 'rgba(38, 38, 38, 0.33)',
+          borderTopColor: 'rgba(255, 255, 255, 0.08)',
           elevation: 0,
-          height: 90,
-          backgroundColor: 'black',
-          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 88 : 70,
+          backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.bg,
+          paddingTop: 4,
         },
+        tabBarBackground: () =>
+          Platform.OS === 'ios' ? (
+            <BlurView tint="dark" intensity={80} style={StyleSheet.absoluteFill} />
+          ) : null,
         tabBarActiveTintColor: colors.white,
         tabBarInactiveTintColor: colors.textSecondary,
-        tabBarShowLabel: true,
-        tabBarLabelStyle: {
-          fontFamily: typography.caption.fontFamily,
-          fontWeight: '500',
-          fontSize: 10,
-          marginBottom: 10,
-          marginTop: 6, // Increase space between icon and label
-        },
       }}>
       <Tabs.Screen
         name="home"
         options={{
           title: 'Home',
           href: isOffline ? null : undefined,
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'home-fill' : 'home-line'} color={color} focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) =>
+            focused ? (
+              <HomeSmileAngleBold size={24} color={colors.white} />
+            ) : (
+              <HomeSmileAngleLinear size={24} color={colors.textSecondary} />
+            ),
         }}
       />
       <Tabs.Screen
@@ -65,18 +72,24 @@ export default function MainLayout() {
         options={{
           title: 'Search',
           href: isOffline ? null : undefined,
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'search-line' : 'search-line'} color={color} focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) =>
+            focused ? (
+              <MagnifierLinear size={24} color={colors.white} />
+            ) : (
+              <MagnifierLinear size={24} color={colors.textSecondary} />
+            ),
         }}
       />
       <Tabs.Screen
         name="downloads"
         options={{
           title: 'Downloads',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'download-line' : 'download-line'} color={color} focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) =>
+            focused ? (
+              <ArchiveDownMinimalisticBold size={24} color={colors.white} />
+            ) : (
+              <ArchiveDownMinimalisticLinear size={24} color={colors.textSecondary} />
+            ),
         }}
       />
       <Tabs.Screen
@@ -84,8 +97,10 @@ export default function MainLayout() {
         options={{
           title: 'Account',
           href: isOffline ? null : undefined,
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="" color={color} focused={focused} isAvatar={true} />
+          tabBarIcon: ({ focused }) => (
+            <View style={focused ? styles.activeAvatarWrapper : styles.inactiveAvatarWrapper}>
+              <DefaultAvatarFace size={26} />
+            </View>
           ),
         }}
       />
@@ -93,7 +108,8 @@ export default function MainLayout() {
   );
 }
 
-
+/*
+// Glow indicator commented out as requested
 function TabIcon({ name, color, focused, isAvatar }: { name: any; color: any; focused: boolean; isAvatar?: boolean }) {
   const opacity = useSharedValue(focused ? 1 : 0);
 
@@ -133,29 +149,13 @@ function TabIcon({ name, color, focused, isAvatar }: { name: any; color: any; fo
     </View>
   );
 }
+*/
 
 const styles = StyleSheet.create({
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    width: 60,
+  activeAvatarWrapper: {
+    opacity: 1,
   },
-  glowContainer: {
-    position: 'absolute',
-    top: -15, // Precisely on the top border
-    left: -50, // Center 160px width inside 60px icon container ((60 - 160) / 2)
-    width: 160,
-    height: 70, // Large enough to fit the bottom half of the glow
-    overflow: 'hidden', // Clips the top half that would bleed above the tab bar
-    zIndex: -1,
-  },
-  glowSquash: {
-    position: 'absolute',
-    left: 0,
-    top: -80,  // Center the 160px high SVG exactly at y=0 (the top border)
-    width: 160,
-    height: 160,
-    transform: [{ scaleY: 0.7 }], // Radiates 56px downwards, perfectly stopping halfway behind the icon
+  inactiveAvatarWrapper: {
+    opacity: 0.7,
   },
 });

@@ -94,8 +94,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: typography.bodyBold.fontFamily,
-    fontWeight: '700',
-    fontSize: 16,
+    fontSize: 20,
     color: '#FFFFFF',
     marginBottom: 4,
   },

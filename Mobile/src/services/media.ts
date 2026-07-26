@@ -111,7 +111,47 @@ export function cinesrcUrl(
   return `https://cinesrc.st/embed/${type}/${id}?${query}`;
 }
 
-export function adjustDominantColor(color: string, fallback = '#1a1a1a'): string {
+export function getItemFallbackColor(item?: MediaSummary): string {
+  if (!item) return '#1e293b';
+
+  if (item.genreIds && item.genreIds.length > 0) {
+    const primaryGenre = item.genreIds[0];
+    switch (primaryGenre) {
+      case 28: return '#1c2e42'; // Action: Dark Navy Blue
+      case 12: return '#1d3330'; // Adventure: Dark Forest Teal
+      case 16: return '#291d38'; // Animation: Dark Purple
+      case 35: return '#332918'; // Comedy: Dark Warm Amber
+      case 80: return '#2c1e28'; // Crime: Dark Burgundy
+      case 99: return '#222830'; // Documentary: Dark Slate
+      case 18: return '#242038'; // Drama: Deep Indigo
+      case 10751: return '#1f3138'; // Family: Dark Ocean Cyan
+      case 14: return '#291b33'; // Fantasy: Deep Violet
+      case 27: return '#33181c'; // Horror: Crimson Dark Red
+      case 878: return '#182f38'; // Sci-Fi: Dark Slate Cyan
+      case 53: return '#281a24'; // Thriller: Deep Plum
+      default: break;
+    }
+  }
+
+  const palette = [
+    '#1e293b',
+    '#261c33',
+    '#17302b',
+    '#301b24',
+    '#2e2417',
+    '#1b2d3d',
+    '#281d33',
+  ];
+  let hash = 0;
+  const str = item.title || `${item.id}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % palette.length;
+  return palette[index];
+}
+
+export function adjustDominantColor(color: string, fallback = '#161e27'): string {
   if (!color || color === 'transparent') return fallback;
   
   let r = 0, g = 0, b = 0;
@@ -137,8 +177,6 @@ export function adjustDominantColor(color: string, fallback = '#1a1a1a'): string
     return fallback;
   }
 
-  // Blend the color with black (e.g. 55% black) so it becomes
-  // an ambient dark tint, while keeping enough color to be visible.
   r = Math.floor(r * 0.45);
   g = Math.floor(g * 0.45);
   b = Math.floor(b * 0.45);

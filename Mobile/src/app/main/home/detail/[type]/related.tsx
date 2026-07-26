@@ -56,8 +56,8 @@ export default function RelatedScreen() {
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
-              <MediaCard 
-                item={item} 
+              <MediaCard
+                item={item}
                 onPress={() => router.push(`/main/home/detail/${item.mediaType}/${item.id}` as any)}
               />
             </View>
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Aeonik-Bold'
   },
   listContent: {
     padding: 16,
@@ -119,5 +119,6 @@ const styles = StyleSheet.create({
   emptyText: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 16,
+    fontFamily: 'Aeonik-Regular'
   },
 });

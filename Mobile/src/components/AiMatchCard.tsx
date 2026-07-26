@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   cardContainer: {
     width: 240,
     height: 340,
-    borderRadius: 16,
+    borderRadius: 6,
     overflow: 'hidden',
     backgroundColor: '#1E293B',
     marginHorizontal: 8,
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: typography.bodyBold.fontFamily,
-    fontWeight: '700',
+    letterSpacing: -0.44,
     fontSize: 20,
     color: '#FFFFFF',
     marginBottom: 6,

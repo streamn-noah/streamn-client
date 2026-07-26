@@ -10,7 +10,8 @@ import { getMediaDetail, getSeasonEpisodes } from '@/services/tmdb';
 import { MediaDetail, tmdbImage } from '@/services/media';
 import { fetchStreamSources, getFileSizeRange, SourceItem, prewarmStreamCache, fetchSeasonDownloadSources } from '@/services/stream-source';
 import { getWatchProgress, WatchProgress } from '@/services/storage';
-import MaskedView from '@react-native-masked-view/masked-view';
+import { PlayIcon as PlayBold, ConfettiMinimalisticIcon as ConfettiMinimalisticBold } from '@solar-icons/react-native/bold';
+import { ClapperboardOpenIcon as ClapperboardOpenLinear } from '@solar-icons/react-native/linear';
 import { typography, colors } from '@/constants/theme';
 import { useAuth } from '@/components/providers/auth-provider';
 import {
@@ -892,7 +893,7 @@ export default function MediaDetailModal() {
       {/* HEADER (Sticky) */}
       <View style={[styles.stickyHeader, { paddingTop: insets.top }]}>
         <LinearGradient
-          colors={['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.4)', 'transparent']}
+          colors={['rgba(15,15,15,0.9)', 'rgba(15,15,15,0.4)', 'transparent']}
           style={[StyleSheet.absoluteFill as any, { opacity: Math.max(0, Math.min(scrollY / 50, 1)) }]}
           pointerEvents="none"
         />
@@ -927,7 +928,7 @@ export default function MediaDetailModal() {
             contentPosition="top"
           />
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.4)', '#000']}
+            colors={['transparent', 'rgba(15,15,15,0.4)', '#0F0F0F']}
             locations={[0, 0.5, 1]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
@@ -965,7 +966,7 @@ export default function MediaDetailModal() {
                 {mainPlayLoading ? (
                   <ActivityIndicator size="small" color="#000" />
                 ) : (
-                  <Icon name="play-fill" size={20} color="#000" />
+                  <PlayBold size={20} color="#000" />
                 )}
                 <Text style={[styles.watchNowText, { marginLeft: 8 }]}>
                   {mainPlayLoading ? "Loading..." : watchProgress ? "Continue Watching" : "Watch Now"}
@@ -978,7 +979,7 @@ export default function MediaDetailModal() {
               activeOpacity={0.8}
               onPress={handleWatchTogether}
             >
-              <Icon name="tv-2-line" size={20} color="#fff" />
+              <ConfettiMinimalisticBold size={20} color="#fff" />
               <Text style={styles.watchTogetherText}>Watch Together</Text>
             </TouchableOpacity>
 
@@ -996,7 +997,7 @@ export default function MediaDetailModal() {
               <View style={styles.actionItem}>
                 <TouchableOpacity style={styles.actionIconBtn} onPress={handleLikePress} disabled={likeBusy}>
                   <Animated.View style={{ transform: [{ scale: likeScale }] }}>
-                    <Icon name={liked ? "thumb-up-fill" : "thumb-up-line"} size={24} color="#fff" />
+                    <Icon name={liked ? "heart-fill" : "heart-line"} size={24} color="#fff" />
                   </Animated.View>
                 </TouchableOpacity>
                 <Text style={styles.actionLabel}>Like</Text>
@@ -1045,7 +1046,7 @@ export default function MediaDetailModal() {
                     </TouchableOpacity>
                   )}
                   <Text style={styles.actionLabel}>
-                    {isMovie 
+                    {isMovie
                       ? movieDownloadState === 'completed'
                         ? 'Downloaded'
                         : movieDownloadState === 'downloading'
@@ -1067,7 +1068,7 @@ export default function MediaDetailModal() {
                     }
                   }}
                 >
-                  <Icon name="clapperboard-line" size={24} color="#fff" />
+                  <ClapperboardOpenLinear size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.actionLabel}>Trailer</Text>
               </View>
@@ -1453,7 +1454,7 @@ export default function MediaDetailModal() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0F0F0F',
   },
   center: {
     justifyContent: 'center',
@@ -1523,7 +1524,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -1531,25 +1532,23 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   watchNowText: {
+    fontFamily: 'Aeonik-Bold',
     color: '#000',
     fontSize: 16,
-    fontWeight: '700',
   },
   watchTogetherButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 4,
   },
   watchTogetherText: {
+    fontFamily: 'Aeonik-Bold',
     color: '#fff',
     fontSize: 16,
-    fontWeight: '700',
     marginLeft: 12,
   },
   metaRow: {
@@ -1564,11 +1563,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   metaText: {
+    fontFamily: 'Aeonik-Medium',
     color: 'rgba(255,255,255,0.9)',
     fontSize: 12,
     fontWeight: '600',
   },
   metaTextBold: {
+    fontFamily: 'Aeonik-Bold',
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
@@ -1587,21 +1588,23 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   certText: {
+    fontFamily: 'Aeonik-Bold',
     color: 'rgba(255,255,255,0.9)',
     fontSize: 10,
     fontWeight: '700',
   },
   descriptionText: {
+    fontFamily: 'Aeonik-Regular',
     color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 12,
   },
   genresText: {
+    fontFamily: 'Aeonik-Medium',
     color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
   },
   castSection: {
     gap: 12
@@ -1613,9 +1616,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   castSectionTitle: {
+    fontFamily: 'Aeonik-Bold',
+    letterSpacing: -0.44,
     color: '#fff',
     fontSize: 20,
-    fontWeight: 'bold',
   },
   castScrollContent: {
     paddingHorizontal: 16,
@@ -1646,14 +1650,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e232d',
   },
   castName: {
+    fontFamily: 'Aeonik-Medium',
     color: '#fff',
     fontSize: 13,
-    fontWeight: '600',
     textAlign: 'center',
     width: '100%',
     marginBottom: 2,
   },
   castCharacter: {
+    fontFamily: 'Aeonik-Regular',
     color: 'rgba(255,255,255,0.5)',
     fontSize: 11,
     textAlign: 'center',
@@ -1672,18 +1677,19 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   actionLabel: {
+    fontFamily: 'Aeonik-Medium',
     color: 'rgba(255,255,255,0.5)',
     fontSize: 10,
-    fontWeight: '600',
   },
   episodesSection: {
     paddingHorizontal: 16,
     gap: 12,
   },
   sectionTitle: {
+    fontFamily: 'Aeonik-Bold',
+    letterSpacing: -0.44,
     color: '#fff',
     fontSize: 20,
-    fontWeight: 'bold',
     marginBottom: 16,
   },
   episodesControlsRow: {
@@ -1699,7 +1705,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0d0d0f',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
+    borderRadius: 6,
     height: 40,
     paddingHorizontal: 12,
   },
@@ -1718,7 +1724,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0d0d0f',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
+    borderRadius: 6,
     height: 40,
     paddingHorizontal: 16,
     gap: 8,
@@ -1731,7 +1737,7 @@ const styles = StyleSheet.create({
   downloadSeasonButton: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 6,
     backgroundColor: '#0d0d0f',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',

@@ -9,6 +9,7 @@
     "@react-native-community/netinfo": "12.0.1",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@react-native-vector-icons/material-icons": "^13.1.2",
+    "@solar-icons/react-native": "^2.0.0-beta.0",
     "@supabase/supabase-js": "^2.110.2",
     "crypto-js": "^4.2.0",
     "expo": "~57.0.7",
@@ -46,7 +47,7 @@
     "react-native-remix-icon": "^4.7.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
-    "react-native-svg": "15.15.4",
+    "react-native-svg": "^15.15.4",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-web": "~0.21.0",
     "react-native-webview": "13.16.1",
@@ -67,7 +68,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "update:preview": "eas update --channel preview",
+    "update:production": "eas update --channel production"
   },
   "private": true
 }

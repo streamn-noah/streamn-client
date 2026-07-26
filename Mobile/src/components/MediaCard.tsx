@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   cardContainer: {
-    marginHorizontal: 6,
+    marginHorizontal: 4,
     width: 130,
     height: 182, // 1:1.4
     flexDirection: 'row',
@@ -358,11 +358,9 @@ const styles = StyleSheet.create({
   cardImageWrapper: {
     width: 130,
     height: 182,
-    borderRadius: 12,
+    borderRadius: 4,
     overflow: 'hidden',
     backgroundColor: '#1e232d',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   cardImage: {
     width: '100%',
@@ -399,21 +397,20 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   top10RankText: {
+    fontFamily: 'Aeonik-Black',
+    letterSpacing: -0.44,
     fontSize: 80,
-    fontWeight: '900',
     color: 'rgba(255,255,255,0.2)', // simplified from gradient stroke
   },
 
   // Continue Watching
   continueContainer: {
-    marginHorizontal: 6,
+    marginHorizontal: 4,
     width: 280,
     aspectRatio: 16 / 9,
-    borderRadius: 16,
+    borderRadius: 6,
     overflow: 'hidden',
     backgroundColor: '#1e232d',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   continueTopRow: {
     position: 'absolute',
@@ -423,9 +420,10 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   continueTopTitle: {
+    fontFamily: 'Aeonik-Bold',
+    letterSpacing: -0.44,
     color: '#fff',
     fontSize: 16,
-    fontWeight: '700',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -472,18 +470,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   continueTitleText: {
+    fontFamily: 'Aeonik-Bold',
+    letterSpacing: -0.44,
     color: '#fff',
     fontSize: 13,
-    fontWeight: '700',
   },
   continueDot: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
   },
   continueSubtitleText: {
+    fontFamily: 'Aeonik-Medium',
+    letterSpacing: -0.44,
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
-    fontWeight: '500',
   },
   continueOptionsBtn: {
     padding: 4,
@@ -507,10 +507,8 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 120, // 2/3 of 180
-    borderRadius: 12,
+    borderRadius: 6,
     backgroundColor: '#1e232d',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -523,11 +521,9 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 120,
-    borderRadius: 12,
+    borderRadius: 6,
     overflow: 'hidden',
     backgroundColor: '#1e232d',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     shadowColor: '#000',
     shadowOffset: { width: 8, height: 0 },
     shadowOpacity: 0.7,

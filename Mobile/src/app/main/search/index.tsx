@@ -317,11 +317,11 @@ export default function SearchScreen() {
       const defaultTabStyle = {
         position: 'absolute',
         borderTopWidth: 1,
-        borderTopColor: 'rgba(38, 38, 38, 0.33)',
+        borderTopColor: 'rgba(255, 255, 255, 0.08)',
         elevation: 0,
-        height: 90,
-        backgroundColor: 'black',
-        paddingTop: 8,
+        height: Platform.OS === 'ios' ? 88 : 70,
+        backgroundColor: colors.bg,
+        paddingTop: 4,
       };
       navigation.setOptions({
         tabBarStyle: defaultTabStyle
@@ -522,9 +522,9 @@ export default function SearchScreen() {
       {!isAiMode ? (
         <View style={styles.headerContainer}>
           <Text style={styles.headerTitle}>Search</Text>
-          <TouchableOpacity style={styles.headerIconBtn} activeOpacity={0.7}>
+          {/* <TouchableOpacity style={styles.headerIconBtn} activeOpacity={0.7}>
             <Icon name="notification-2-line" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       ) : (
         <View style={styles.headerContainer}>
@@ -765,10 +765,9 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   headerTitle: {
-    ...typography.title,
+    fontFamily: 'Aeonik-Bold',
     fontSize: 24,
     color: '#fff',
-    fontWeight: '700',
   },
   headerIconBtn: {
     padding: 6,
@@ -819,7 +818,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#FFFFFF',
     fontSize: 15,
-    fontFamily: typography.body.fontFamily,
+    fontFamily: 'Aeonik-Medium',
     paddingLeft: 10,
     paddingRight: 40,
     height: '100%',
@@ -867,13 +866,11 @@ const styles = StyleSheet.create({
   floatingAiBtnLabel: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '600',
-    fontFamily: fontFamilies.bodyMedium,
+    fontFamily: 'Aeonik-Medium',
     marginLeft: 6,
   },
   sectionHeader: {
-    fontFamily: typography.title.fontFamily,
-    fontWeight: '700',
+    fontFamily: 'Aeonik-Bold',
     fontSize: 18,
     color: '#FFFFFF',
     paddingHorizontal: 16,
@@ -941,7 +938,7 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
     fontSize: 15,
     lineHeight: 22,
-    fontFamily: typography.body.fontFamily,
+    fontFamily: 'Aeonik-Regular',
   },
   suggestionsContainer: {
     marginTop: 16,
@@ -960,7 +957,7 @@ const styles = StyleSheet.create({
   suggestionChipText: {
     color: 'rgba(255, 255, 255, 0.75)',
     fontSize: 13,
-    fontFamily: typography.caption.fontFamily,
+    fontFamily: 'Aeonik-Regular',
   },
 
   // Horizontal AI matches
@@ -969,8 +966,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   aiResultsSubheading: {
-    fontFamily: typography.bodyBold.fontFamily,
-    fontWeight: '700',
+    fontFamily: 'Aeonik-Medium',
     fontSize: 16,
     color: '#FFFFFF',
     marginTop: 14,
@@ -1012,7 +1008,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#FFFFFF',
     fontSize: 15,
-    fontFamily: typography.body.fontFamily,
+    fontFamily: 'Aeonik-Regular',
     height: '100%',
   },
   aiSendButton: {
@@ -1023,7 +1019,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     marginTop: 8,
-    fontFamily: typography.caption.fontFamily,
+    fontFamily: 'Aeonik-Regular',
     zIndex: 11,
   },
 });

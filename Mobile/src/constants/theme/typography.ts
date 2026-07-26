@@ -2,12 +2,12 @@ import { colors } from "./colors";
 import type { TextStyle } from "react-native";
 
 export const fontFamilies = {
-  display: "DMSans_700Bold",
-  body: "DMSans_400Regular",
-  bodyMedium: "DMSans_500Medium",
-  bodySemiBold: "DMSans_600SemiBold",
-  bodyBold: "DMSans_700Bold",
-  bodyHeavy: "DMSans_700Bold",
+  display: "Aeonik-Bold",
+  body: "Aeonik-Regular",
+  bodyMedium: "Aeonik-Medium",
+  bodySemiBold: "Aeonik-Medium",
+  bodyBold: "Aeonik-Bold",
+  bodyHeavy: "Aeonik-Black",
 } as const;
 
 export const typography: Record<
@@ -16,58 +16,51 @@ export const typography: Record<
 > = {
   displayLarge: {
     fontFamily: fontFamilies.display,
-    fontWeight: '700',
     fontSize: 46,
     lineHeight: 54,
-    letterSpacing: -0.7,
+    letterSpacing: -0.44,
     color: colors.textPrimary,
   },
   headline: {
     fontFamily: fontFamilies.bodyBold,
-    fontWeight: '700',
     fontSize: 28,
     lineHeight: 34,
-    letterSpacing: -0.7,
+    letterSpacing: -0.44,
     color: colors.textPrimary,
   },
   title: {
     fontFamily: fontFamilies.bodySemiBold,
-    fontWeight: '600',
     fontSize: 24,
     lineHeight: 26,
-    letterSpacing: -0.7,
+    letterSpacing: -0.44,
     color: colors.textPrimary,
   },
   body: {
     fontFamily: fontFamilies.body,
-    fontWeight: '400',
     fontSize: 16,
     lineHeight: 24,
-    letterSpacing: -0.7,
+    letterSpacing: -0.44,
     color: colors.textPrimary,
   },
   bodyBold: {
     fontFamily: fontFamilies.bodyBold,
-    fontWeight: '700',
     fontSize: 16,
     lineHeight: 24,
-    letterSpacing: -0.7,
+    letterSpacing: -0.44,
     color: colors.textPrimary,
   },
   caption: {
     fontFamily: fontFamilies.bodyMedium,
-    fontWeight: '500',
     fontSize: 13,
     lineHeight: 18,
-    letterSpacing: -0.7,
+    letterSpacing: -0.44,
     color: colors.textSecondary,
   },
   button: {
     fontFamily: fontFamilies.bodySemiBold,
-    fontWeight: '600',
     fontSize: 15,
     lineHeight: 20,
-    letterSpacing: -0.7,
+    letterSpacing: -0.44,
     color: colors.textPrimary,
   },
 };

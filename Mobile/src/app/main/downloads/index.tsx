@@ -491,10 +491,9 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   headerTitle: {
-    ...typography.title,
+    fontFamily: 'Aeonik-Bold',
     fontSize: 24,
     color: '#fff',
-    fontWeight: '700',
   },
   editButton: {
     paddingHorizontal: 12,
@@ -737,15 +736,14 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   emptyTitle: {
-    ...typography.headline,
+    fontFamily: 'Aeonik-Bold',
     fontSize: 22,
-    fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
     marginBottom: 12,
   },
   emptySubtitle: {
-    ...typography.body,
+    fontFamily: 'Aeonik-Regular',
     fontSize: 14,
     lineHeight: 20,
     color: colors.textSecondary,
@@ -755,16 +753,15 @@ const styles = StyleSheet.create({
   emptyButton: {
     width: '100%',
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: 4,
     backgroundColor: '#E6E6E6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyButtonText: {
-    ...typography.button,
+    fontFamily: 'Aeonik-Bold',
     fontSize: 15,
     color: '#000000',
-    fontWeight: '700',
   },
 });
 

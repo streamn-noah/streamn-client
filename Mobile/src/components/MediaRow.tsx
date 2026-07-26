@@ -56,10 +56,10 @@ export default function MediaRow({ title, items, variant = 'default', onTitlePre
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item, index) => item.id ? `${item.mediaType || 'row'}-${item.id}` : `row-${index}`}
         renderItem={({ item, index }) => (
-          <MediaCard 
-            item={item} 
-            variant={variant} 
-            rank={variant === 'top10' ? index + 1 : undefined} 
+          <MediaCard
+            item={item}
+            variant={variant}
+            rank={variant === 'top10' ? index + 1 : undefined}
             index={index}
             shouldAnimate={shouldAnimate}
             onPress={() => {
@@ -84,23 +84,24 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   titleContainer: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12, 
-    paddingHorizontal: 16 
+    marginBottom: 16,
+    paddingHorizontal: 16
   },
   rowTitle: {
+    fontFamily: 'Aeonik-Bold',
+    letterSpacing: -0.44,
     color: '#fff',
     fontSize: 20,
-    fontWeight: '700',
   },
   viewMoreText: {
+    fontFamily: 'Aeonik-Medium',
     color: '#aaa',
     fontSize: 14,
-    fontWeight: '600',
   },
   rowList: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
   },
 });

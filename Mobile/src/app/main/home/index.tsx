@@ -79,44 +79,19 @@ const HomeSkeleton = () => {
   );
 };
 
-function TabItem({ item, isActive, onPress, headerOpacity }: { item: string, isActive: boolean, onPress: () => void, headerOpacity: any }) {
-  const opacity = useRef(new Animated.Value(isActive ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: isActive ? 1 : 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, [isActive]);
-
+function TabItem({ item, isActive, onPress }: { item: string, isActive: boolean, onPress: () => void }) {
   return (
     <TouchableOpacity
       activeOpacity={0.8}
       onPress={onPress}
-      style={styles.tabButton}
+      style={[
+        styles.tabPill,
+        isActive ? styles.tabPillActive : styles.tabPillInactive,
+      ]}
     >
-      <Animated.View style={[styles.glowContainer, { opacity: Animated.multiply(opacity, headerOpacity) }]}>
-        <View style={styles.glowSquash}>
-          <Svg height="160" width="160">
-            <Defs>
-              <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
-                <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
-                <Stop offset="40%" stopColor="#ffffff" stopOpacity="0.2" />
-                <Stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-              </RadialGradient>
-            </Defs>
-            <Rect width="160" height="160" fill="url(#glow)" />
-          </Svg>
-        </View>
-      </Animated.View>
-
-
       <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
         {item}
       </Text>
-
-      <Animated.View style={[styles.tabUnderline, { opacity }]} />
     </TouchableOpacity>
   );
 }
@@ -460,20 +435,20 @@ export default function HomeScreen() {
         crimeThrillers,
         publicWatchlists,
       ] = await Promise.all([
-        discoverByOriginCountry("movie", "NG"),
-        getTopRated("tv"),
-        discoverByOriginCountry("tv", "NG"),
-        getTopRated("movie"),
-        discoverByGenre("movie", 28), // Action
-        discoverByOriginCountry("tv", "KR"),
-        discoverByGenre("movie", 35), // Comedy
-        discoverByGenre("movie", 878), // Sci-Fi
-        getAnime(),
-        discoverByGenre("movie", 27), // Horror
-        discoverByGenre("movie", 10749), // Romance
-        discoverByGenre("movie", 12), // Adventure
-        discoverByGenre("movie", 80), // Crime
-        getPublicWatchlists(),
+        discoverByOriginCountry("movie", "NG").catch(() => []),
+        getTopRated("tv").catch(() => []),
+        discoverByOriginCountry("tv", "NG").catch(() => []),
+        getTopRated("movie").catch(() => []),
+        discoverByGenre("movie", 28).catch(() => []), // Action
+        discoverByOriginCountry("tv", "KR").catch(() => []),
+        discoverByGenre("movie", 35).catch(() => []), // Comedy
+        discoverByGenre("movie", 878).catch(() => []), // Sci-Fi
+        getAnime().catch(() => []),
+        discoverByGenre("movie", 27).catch(() => []), // Horror
+        discoverByGenre("movie", 10749).catch(() => []), // Romance
+        discoverByGenre("movie", 12).catch(() => []), // Adventure
+        discoverByGenre("movie", 80).catch(() => []), // Crime
+        getPublicWatchlists().catch(() => []),
       ]);
 
       setAllRows((prev: any[]) => {
@@ -633,7 +608,7 @@ export default function HomeScreen() {
         maxToRenderPerBatch={1}
         windowSize={3}
         renderItem={({ item, index }) => (
-          <View style={[index === 0 && { marginTop: -10, zIndex: 2 }]}>
+          <View style={[index === 0 && { marginTop: 14, zIndex: 2 }]}>
             <MediaRow
               title={item.title}
               items={item.items}
@@ -655,6 +630,7 @@ export default function HomeScreen() {
             listScale={listScale}
             activeBannerProgress={activeBannerProgress}
             isActive={isBannerInView}
+            onDominantColorChange={setDominantColor}
           />
         }
       />
@@ -760,19 +736,17 @@ export default function HomeScreen() {
           StyleSheet.absoluteFill,
           {
             opacity: headerOpacity,
-            backgroundColor: 'rgba(0,0,0,1)',
-            // borderBottomWidth: StyleSheet.hairlineWidth,
-            // borderBottomColor: 'rrgba(38, 38, 38, 0.33)'
+            backgroundColor: dominantColor || 'rgba(15,15,18,1)',
           }
         ]} pointerEvents="none" />
 
         {/* Top Header Row */}
-        <View style={[styles.headerContent, { marginTop: insets.top, paddingVertical: 12, paddingBottom: 16 }]} pointerEvents="box-none">
+        <View style={[styles.headerContent, { marginTop: insets.top, paddingVertical: 12, paddingBottom: 24 }]} pointerEvents="box-none">
           <Text style={styles.headerForYouText}>For You</Text>
           <View style={styles.headerIcons}>
-            <TouchableOpacity activeOpacity={0.8}>
+            {/* <TouchableOpacity activeOpacity={0.8}>
               <Icon name="search-line" size={24} color="#fff" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
 
@@ -788,7 +762,6 @@ export default function HomeScreen() {
                 item={item as string}
                 isActive={activeTab === item}
                 onPress={() => setActiveTab(item as any)}
-                headerOpacity={headerOpacity}
               />
             )}
             contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
@@ -827,10 +800,9 @@ const styles = StyleSheet.create({
 
   },
   headerForYouText: {
-    ...typography.title,
+    fontFamily: 'Aeonik-Bold',
     fontSize: 24,
     color: '#fff',
-    fontWeight: '700',
   },
   headerIcons: {
     flexDirection: 'row',
@@ -838,57 +810,47 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   tabsContainer: {
-    height: 40,
-  },
-  tabButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    height: 44,
     justifyContent: 'center',
-    height: 36,
-    position: 'relative',
   },
-  tabButtonActive: {},
+  tabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    height: 38,
+    borderRadius: 20,
+    gap: 8,
+  },
+  tabPillInactive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  tabPillActive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   tabText: {
-    color: 'rgba(255,255,255,0.8)',
+    fontFamily: 'Aeonik-Medium',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 14,
-    fontWeight: '600',
   },
   tabTextActive: {
-    color: 'white',
-  },
-  glowContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: '50%',
-    marginLeft: -80,
-    width: 160,
-    height: 36,
-    overflow: 'hidden',
-    zIndex: -1,
-  },
-  glowSquash: {
-    position: 'absolute',
-    left: 0,
-    bottom: -80,
-    width: 160,
-    height: 160,
-    transform: [{ scaleY: 0.5 }],
-  },
-  tabUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    left: 12,
-    right: 12,
-    height: 2,
-    backgroundColor: 'white',
-    borderRadius: 1,
+    fontFamily: 'Aeonik-Bold',
+    color: '#000000',
   },
 
   // Sheet additions
   sheetTitle: {
+    fontFamily: 'Aeonik-Bold',
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -914,9 +876,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   sheetListItemText: {
+    fontFamily: 'Aeonik-Medium',
     color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
   },
   sheetCreateBtn: {
     flexDirection: 'row',
@@ -925,9 +887,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sheetCreateBtnText: {
+    fontFamily: 'Aeonik-Medium',
     color: 'rgba(255,255,255,0.6)',
     fontSize: 15,
-    fontWeight: '600',
     marginLeft: 12,
   },
   newWatchlistContainer: {
@@ -939,6 +901,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
   },
   newWatchlistInput: {
+    fontFamily: 'Aeonik-Medium',
     color: '#fff',
     fontSize: 15,
     paddingVertical: 8,
@@ -958,9 +921,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   newWatchlistBtnText: {
+    fontFamily: 'Aeonik-Medium',
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
   },
   sheetDoneBtn: {
     backgroundColor: '#fff',
@@ -970,9 +933,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sheetDoneBtnText: {
+    fontFamily: 'Aeonik-Bold',
     color: '#000',
     fontSize: 16,
-    fontWeight: '700',
   },
   // Toast
   toastContainer: {
@@ -996,14 +959,14 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   toastText: {
+    fontFamily: 'Aeonik-Medium',
     color: '#121214',
     fontSize: 14,
-    fontWeight: '600',
   },
   toastActionText: {
+    fontFamily: 'Aeonik-Bold',
     color: '#2563EB',
     fontSize: 14,
-    fontWeight: '700',
     textTransform: 'uppercase',
   },
 });

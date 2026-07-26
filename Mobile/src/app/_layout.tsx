@@ -1,5 +1,6 @@
 import '@/services/livekit-polyfill';
-import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold } from '@expo-google-fonts/dm-sans';
+import '@/services/font-patch';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -12,10 +13,14 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    DMSans_400Regular,
-    DMSans_500Medium,
-    DMSans_600SemiBold,
-    DMSans_700Bold,
+    'Aeonik': require('../../assets/fonts/AEONIK-MEDIUM.otf'),
+    'Aeonik-Regular': require('../../assets/fonts/AEONIK-REGULAR.otf'),
+    'Aeonik-Medium': require('../../assets/fonts/AEONIK-MEDIUM.otf'),
+    'Aeonik-Bold': require('../../assets/fonts/AEONIK-BOLD.otf'),
+    'Aeonik-Black': require('../../assets/fonts/AeonikBlack.otf'),
+    'AEONIK-REGULAR': require('../../assets/fonts/AEONIK-REGULAR.otf'),
+    'AEONIK-MEDIUM': require('../../assets/fonts/AEONIK-MEDIUM.otf'),
+    'AEONIK-BOLD': require('../../assets/fonts/AEONIK-BOLD.otf'),
   });
 
   useEffect(() => {
